@@ -41,11 +41,12 @@ export async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error;
-      const status = error instanceof AmadeusProviderError ? error.status : undefined;
+      const providerError = error instanceof AmadeusProviderError ? error : undefined;
+      const status = providerError?.status;
       if (!status || !isTransientStatus(status) || attempt >= options.maxAttempts) {
         throw error;
       }
-      await options.sleep(jitteredDelay(attempt, options, error.retryAfterMs));
+      await options.sleep(jitteredDelay(attempt, options, providerError.retryAfterMs));
     }
   }
   throw lastError;

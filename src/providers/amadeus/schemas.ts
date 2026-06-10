@@ -76,12 +76,15 @@ export function parseTokenResponse(value: unknown): AmadeusTokenResponse {
     throw new AmadeusProviderError("Invalid Amadeus OAuth token response");
   }
 
-  return {
+  const parsed: AmadeusTokenResponse = {
     token_type: root.token_type,
     access_token: root.access_token,
-    expires_in: root.expires_in,
-    state: typeof root.state === "string" ? root.state : undefined
+    expires_in: root.expires_in
   };
+  if (typeof root.state === "string") {
+    parsed.state = root.state;
+  }
+  return parsed;
 }
 
 export function parseSearchResponse(value: unknown): AmadeusFlightOffersSearchResponse {
@@ -98,11 +101,13 @@ export function parsePricingResponse(value: unknown): AmadeusFlightOffersPricing
   if (!Array.isArray(data.flightOffers)) {
     throw new AmadeusProviderError("Invalid Amadeus Flight Offers Price response");
   }
-  return {
+  const parsed: AmadeusFlightOffersPricingResponse = {
     data: {
-      type: typeof data.type === "string" ? data.type : undefined,
       flightOffers: data.flightOffers as AmadeusFlightOffer[]
     }
   };
+  if (typeof data.type === "string") {
+    parsed.data.type = data.type;
+  }
+  return parsed;
 }
-

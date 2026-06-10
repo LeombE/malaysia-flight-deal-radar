@@ -66,11 +66,16 @@ export class AmadeusTokenManager {
 
   private async fetchAndCacheToken(key: string): Promise<string> {
     const request = buildTokenRequest(this.config);
-    const response = await this.deps.fetch(request.url, {
-      method: request.method,
-      headers: request.headers,
-      body: request.body
-    });
+    const init: RequestInit = {
+      method: request.method ?? "POST"
+    };
+    if (request.headers !== undefined) {
+      init.headers = request.headers;
+    }
+    if (request.body !== undefined) {
+      init.body = request.body;
+    }
+    const response = await this.deps.fetch(request.url, init);
 
     if (!response.ok) {
       throw sanitizeAmadeusError(response.status, "OAuth token request");

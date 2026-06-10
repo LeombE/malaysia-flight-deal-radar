@@ -104,13 +104,18 @@ export class AmadeusProvider implements FlightProvider {
     const response = await this.requestJsonWithAuth(
       () => {
         const request = buildPricingRequest(this.config, input.revalidationPayload as never);
+        const init: RequestInit = {
+          method: request.method ?? "POST"
+        };
+        if (request.headers !== undefined) {
+          init.headers = request.headers;
+        }
+        if (request.body !== undefined) {
+          init.body = request.body;
+        }
         return {
           url: request.url,
-          init: {
-            method: request.method,
-            headers: request.headers,
-            body: request.body
-          }
+          init
         };
       },
       "Flight Offers Price"
@@ -185,10 +190,11 @@ export class AmadeusProvider implements FlightProvider {
       });
       if (!response.ok) {
         const retryAfterMs = parseRetryAfterMs(response.headers.get("Retry-After"));
-        throw new AmadeusProviderError(`Amadeus ${context} failed with HTTP ${response.status}`, {
-          status: response.status,
-          retryAfterMs
-        });
+        const errorOptions: { status: number; retryAfterMs?: number } = { status: response.status };
+        if (retryAfterMs !== undefined) {
+          errorOptions.retryAfterMs = retryAfterMs;
+        }
+        throw new AmadeusProviderError(`Amadeus ${context} failed with HTTP ${response.status}`, errorOptions);
       }
       return response.json();
     });
@@ -205,10 +211,11 @@ export class AmadeusProvider implements FlightProvider {
 
   private healthFromError(error: AmadeusProviderError, context: string): ProviderHealth {
     if (error.status === 429) {
-      return {
-        ...this.buildHealth("rate_limited", `${context} rate limited`),
-        retryAfterMs: error.retryAfterMs
-      };
+      const health = this.buildHealth("rate_limited", `${context} rate limited`);
+      if (error.retryAfterMs !== undefined) {
+        health.retryAfterMs = error.retryAfterMs;
+      }
+      return health;
     }
     if (error.status === 401 || error.status === 403) {
       return this.buildHealth("unhealthy", `${context} auth/access failed`);

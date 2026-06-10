@@ -1,6 +1,6 @@
 export class AmadeusProviderError extends Error {
-  readonly status?: number;
-  readonly retryAfterMs?: number;
+  readonly status: number | undefined;
+  readonly retryAfterMs: number | undefined;
 
   constructor(message: string, options: { status?: number; retryAfterMs?: number } = {}) {
     super(message);
@@ -13,4 +13,3 @@ export class AmadeusProviderError extends Error {
 export function sanitizeAmadeusError(status: number, context: string): AmadeusProviderError {
   return new AmadeusProviderError(`Amadeus ${context} failed with HTTP ${status}`, { status });
 }
-

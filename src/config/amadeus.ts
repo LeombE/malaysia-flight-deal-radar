@@ -1,8 +1,8 @@
 import type { ProviderRetentionMode } from "../providers/types.ts";
 
 export interface AmadeusConfig {
-  clientId?: string;
-  clientSecret?: string;
+  clientId: string | undefined;
+  clientSecret: string | undefined;
   baseUrl: string;
   currencyCode: string;
   retentionMode: ProviderRetentionMode;
@@ -46,4 +46,3 @@ export function parseAmadeusConfig(env: Record<string, string | undefined>): Ama
 export function isAmadeusEnabled(config: AmadeusConfig): boolean {
   return Boolean(config.clientId && config.clientSecret);
 }
-

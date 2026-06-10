@@ -7,7 +7,7 @@ import type { ProviderOffer } from "../src/providers/types.ts";
 
 interface MockCall {
   url: string;
-  init?: RequestInit;
+  init: RequestInit | undefined;
 }
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -420,4 +420,3 @@ test("provider registry keeps Amadeus alongside MockProvider", () => {
   assert.deepEqual(disabledProviders.map((provider) => provider.name), ["mock", "amadeus"]);
   assert.deepEqual(listEnabledProviders(disabledProviders).map((provider) => provider.name), ["mock"]);
 });
-

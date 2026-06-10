@@ -29,17 +29,18 @@ function normalizeSegment(segment: AmadeusSegment): ProviderSegment | null {
   const destinationIata = segment.arrival?.iataCode;
   if (!originIata || !destinationIata) return null;
 
-  return {
+  const normalized: ProviderSegment = {
     originIata,
     destinationIata,
-    departureAt: segment.departure?.at,
-    arrivalAt: segment.arrival?.at,
-    carrierCode: segment.carrierCode,
-    operatingCarrierCode: segment.operating?.carrierCode,
-    flightNumber: segment.number,
     durationMinutes: parseIsoDurationMinutes(segment.duration),
     technicalStops: segment.numberOfStops ?? 0
   };
+  if (segment.departure?.at) normalized.departureAt = segment.departure.at;
+  if (segment.arrival?.at) normalized.arrivalAt = segment.arrival.at;
+  if (segment.carrierCode) normalized.carrierCode = segment.carrierCode;
+  if (segment.operating?.carrierCode) normalized.operatingCarrierCode = segment.operating.carrierCode;
+  if (segment.number) normalized.flightNumber = segment.number;
+  return normalized;
 }
 
 function normalizeItinerary(itinerary: AmadeusItinerary): ProviderItinerary | null {
@@ -90,7 +91,7 @@ export function normalizeAmadeusOffer(
     }
   }
 
-  return {
+  const normalized: ProviderOffer = {
     provider: "amadeus",
     providerOfferId: offer.id ?? `amadeus-${input.originIata}-${input.destinationIata}-${input.departureDate}`,
     originIata: input.originIata,
@@ -107,7 +108,6 @@ export function normalizeAmadeusOffer(
     totalStops: itineraries.reduce((sum, itinerary) => sum + itinerary.stops, 0),
     carriers: [...carriers].sort(),
     durationMinutes: itineraries.reduce((sum, itinerary) => sum + itinerary.durationMinutes, 0),
-    source: offer.source,
     lastVerifiedAt: verifiedAtIso,
     retentionMode: config.retentionMode,
     display: displayIsRevalidated
@@ -124,5 +124,8 @@ export function normalizeAmadeusOffer(
         },
     revalidationPayload: offer
   };
+  if (offer.source) {
+    normalized.source = offer.source;
+  }
+  return normalized;
 }
-

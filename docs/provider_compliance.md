@@ -9,6 +9,8 @@
 - Do not persist raw provider payloads unless an explicit provider agreement allows it.
 - Never display stale cached provider results as live fares.
 - Always revalidate a fare before alerting or displaying provider-derived live fare content.
+- Suspected deals are statistical signals only. Do not call them confirmed airline promotions unless the provider explicitly returns promotion or campaign data.
+- Historical snapshots are baseline inputs, not live fares. Dashboard and alert copy must make freshness visible.
 
 ## Amadeus
 
@@ -21,4 +23,3 @@ Flight Offers Search can be incomplete for Malaysia deal-radar purposes. Amadeus
 Cached or inspiration-style Amadeus APIs are not live fares and must not be shown as live. This adapter uses Flight Offers Search for search and Flight Offers Price for revalidation before alert or display.
 
 Production use requires verified Amadeus access terms, rate limits, and allowed retention behavior.
-
