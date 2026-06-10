@@ -10,7 +10,9 @@ export type ProviderReadinessBlockingReason =
   | "budget_exhausted"
   | "unsupported_retention_mode"
   | "missing_currency_support"
-  | "missing_revalidation_support";
+  | "missing_revalidation_support"
+  | "unsupported_currency"
+  | "revalidation_not_available";
 
 export interface ProviderReadinessLimit {
   providerName: string;
@@ -24,6 +26,7 @@ export interface ProviderReadinessReport {
   demo_ready: boolean;
   credentials_required: boolean;
   credentials_configured: boolean;
+  test_mode: boolean;
   enabled: boolean;
   real_providers_enabled: boolean;
   dry_run_enabled: boolean;
@@ -56,6 +59,12 @@ function providerCredentialsConfigured(
       configured: Boolean(env.AMADEUS_CLIENT_ID && env.AMADEUS_CLIENT_SECRET)
     };
   }
+  if (providerName === "duffel") {
+    return {
+      required: true,
+      configured: Boolean(env.DUFFEL_ACCESS_TOKEN)
+    };
+  }
   const prefix = providerName.toUpperCase().replaceAll("-", "_");
   const apiKey = env[`${prefix}_API_KEY`] || env[`${prefix}_ACCESS_TOKEN`];
   return {
@@ -67,12 +76,19 @@ function providerCredentialsConfigured(
 function providerCurrencySupported(providerName: string, env: Record<string, string | undefined>): boolean {
   if (providerName === "mock") return true;
   if (providerName === "amadeus") return (env.AMADEUS_CURRENCY_CODE || "MYR").toUpperCase() === "MYR";
+  if (providerName === "duffel") return (env.DUFFEL_CURRENCY_CODE || "MYR").toUpperCase() === "MYR";
   return true;
 }
 
 function providerSupportsRevalidation(providerName: string): boolean {
   if (providerName === "mock") return true;
   if (providerName === "amadeus") return true;
+  if (providerName === "duffel") return true;
+  return false;
+}
+
+function providerTestMode(providerName: string, env: Record<string, string | undefined>): boolean {
+  if (providerName === "duffel") return env.DUFFEL_ACCESS_TOKEN?.startsWith("duffel_test_") ?? false;
   return false;
 }
 
@@ -108,6 +124,8 @@ export function buildProviderReadinessReport(input: {
   const selected = input.config.defaultRealProvider === providerName;
   const retentionMode = input.provider.getRetentionMode();
   const reasons: ProviderReadinessBlockingReason[] = [];
+  const currencySupported = providerCurrencySupported(providerName, input.env);
+  const revalidationSupported = providerSupportsRevalidation(providerName);
 
   if (!mock) {
     if (!input.config.enableRealProviders) reasons.push("real_providers_disabled");
@@ -117,8 +135,12 @@ export function buildProviderReadinessReport(input: {
     if (!selected) reasons.push("provider_not_selected");
     if (remainingBudget <= 0) reasons.push("budget_exhausted");
     if (retentionMode !== "NO_CACHE") reasons.push("unsupported_retention_mode");
-    if (!providerCurrencySupported(providerName, input.env)) reasons.push("missing_currency_support");
-    if (!providerSupportsRevalidation(providerName)) reasons.push("missing_revalidation_support");
+    if (!currencySupported) {
+      reasons.push(providerName === "duffel" ? "unsupported_currency" : "missing_currency_support");
+    }
+    if (!revalidationSupported) {
+      reasons.push(providerName === "duffel" ? "revalidation_not_available" : "missing_revalidation_support");
+    }
   }
 
   const canUseLive = !mock && reasons.length === 0;
@@ -129,6 +151,7 @@ export function buildProviderReadinessReport(input: {
     demo_ready: mock && input.provider.isEnabled(),
     credentials_required: credentials.required,
     credentials_configured: credentials.configured,
+    test_mode: providerTestMode(providerName, input.env),
     enabled: input.provider.isEnabled(),
     real_providers_enabled: input.config.enableRealProviders,
     dry_run_enabled: mock ? false : input.config.realProviderDryRun,

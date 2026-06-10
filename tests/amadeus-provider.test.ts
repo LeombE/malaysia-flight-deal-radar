@@ -413,10 +413,10 @@ test("provider registry keeps Amadeus alongside MockProvider", () => {
     AMADEUS_CLIENT_ID: "client-id",
     AMADEUS_CLIENT_SECRET: "client-secret"
   });
-  assert.deepEqual(providers.map((provider) => provider.name), ["mock", "amadeus"]);
+  assert.deepEqual(providers.map((provider) => provider.name), ["mock", "amadeus", "duffel"]);
   assert.deepEqual(listEnabledProviders(providers).map((provider) => provider.name), ["mock", "amadeus"]);
 
   const disabledProviders = createProviderRegistry({});
-  assert.deepEqual(disabledProviders.map((provider) => provider.name), ["mock", "amadeus"]);
+  assert.deepEqual(disabledProviders.map((provider) => provider.name), ["mock", "amadeus", "duffel"]);
   assert.deepEqual(listEnabledProviders(disabledProviders).map((provider) => provider.name), ["mock"]);
 });

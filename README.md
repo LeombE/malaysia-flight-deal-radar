@@ -2,7 +2,7 @@
 
 Real-time-ish flight deal radar for Malaysia-based travelers. The system scans round-trip economy fares from Malaysian origins to selected Asia destinations, detects unusually cheap MYR fares, and can alert users after provider revalidation.
 
-This repository currently contains the provider scaffold and an optional Amadeus fallback adapter. It is not a booking engine and does not store passenger identity, passport data, payment data, or ticketing state.
+This repository currently contains the provider scaffold, an optional Amadeus fallback scaffold, and a Duffel adapter behind real-provider guardrails. It is not a booking engine and does not store passenger identity, passport data, payment data, checkout state, order state, or ticketing state.
 
 ## Phase 2 Modules
 
@@ -37,7 +37,7 @@ Route priority is deterministic:
 
 The scheduler writes search jobs, fare checks, normalized fare snapshots, and deal scores. It attempts provider revalidation before any offer can become alert/display eligible. Phase 4 adds Telegram alert evaluation after scoring; Telegram failures are recorded but do not fail the scan.
 
-Amadeus remains optional/fallback only. Phase 3 does not add or expand real provider adapters; the scheduler works through the provider registry and skips disabled providers safely.
+Amadeus remains optional/fallback only. Duffel is present as a guarded Phase 6B adapter. The scheduler works through the provider registry and skips disabled or dry-run-blocked providers safely.
 
 ## Telegram Alerts
 
@@ -163,7 +163,9 @@ Update `wrangler.toml` with the database IDs returned by Wrangler. The migration
 
 Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real secrets.
 
-Amadeus is optional and disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present.
+Duffel and Amadeus are optional. Amadeus is disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present. Duffel is disabled unless `DUFFEL_ACCESS_TOKEN` is present and every real-provider guardrail allows it.
+
+Duffel test tokens beginning with `duffel_test_` are reported as `test_mode=true` in provider readiness output. Token values are never returned by health APIs and must not be logged.
 
 Real providers are also blocked by Phase 6A guardrails unless all of these are true:
 
@@ -182,9 +184,21 @@ Invoke-RestMethod "http://localhost:8787/api/provider-health"
 
 MockProvider remains the default local/demo provider. Readiness output shows booleans and reason codes only; it must not expose secrets.
 
+To intentionally test Duffel with mocked-safe local readiness, copy `.dev.vars.example` to `.dev.vars`, add a placeholder or real test token locally, keep dry-run enabled, and inspect provider health:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+(Get-Content ".dev.vars") -replace '^DUFFEL_ACCESS_TOKEN=.*', 'DUFFEL_ACCESS_TOKEN=duffel_test_placeholder' | Set-Content ".dev.vars"
+npm run dev
+Invoke-RestMethod "http://localhost:8787/api/provider-health"
+```
+
+Keep `REAL_PROVIDER_DRY_RUN=true` until you intentionally want the Worker to call Duffel. The current adapter searches and retrieves offers only; it does not create orders, book flights, collect passenger identity, process payment, ticket flights, or implement checkout.
+
 More detail:
 
 - `docs/local_demo.md`
 - `docs/deployment_readiness.md`
 - `docs/provider_readiness.md`
 - `docs/provider_selection.md`
+- `docs/providers/duffel.md`

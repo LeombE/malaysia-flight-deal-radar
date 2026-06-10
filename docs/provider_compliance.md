@@ -20,6 +20,7 @@
 - Provider readiness output may show boolean credential status and blocking reason codes, but never secret values, raw credentials, OAuth tokens, or provider payloads.
 - Telegram alerts must be sent only for fresh, revalidated, non-expired fares. Alert messages are normalized summaries, not raw provider payloads.
 - Telegram delivery errors must be sanitized and must never include bot tokens.
+- The radar is not a booking engine. Do not create orders, collect passenger identity, store passports, process payments, ticket flights, or implement checkout without a separate approved phase.
 
 ## Amadeus
 
@@ -32,3 +33,17 @@ Flight Offers Search can be incomplete for Malaysia deal-radar purposes. Amadeus
 Cached or inspiration-style Amadeus APIs are not live fares and must not be shown as live. This adapter uses Flight Offers Search for search and Flight Offers Price for revalidation before alert or display.
 
 Production use requires verified Amadeus access terms, rate limits, and allowed retention behavior.
+
+## Duffel
+
+Duffel is implemented as a Phase 6B adapter for offer-search validation. It is disabled unless `ENABLE_REAL_PROVIDERS=true`, `REAL_PROVIDER_DRY_RUN=false`, `DEFAULT_REAL_PROVIDER=duffel`, `DUFFEL_ACCESS_TOKEN` is configured, budget remains available, and readiness checks pass.
+
+Tokens beginning with `duffel_test_` are treated as test/sandbox mode and reported only as a boolean. Never log or return the token value.
+
+The adapter may create offer requests and retrieve offers for revalidation. It must not create orders, book flights, collect passenger names or passport data, process payments, ticket flights, or provide checkout.
+
+Duffel offers are short-lived. Search results are not display/alert eligible until revalidated with offer retrieval. Expired offers are rejected, and stale cached Duffel fares must not be shown as live.
+
+Default retention mode is `NO_CACHE`. Persist normalized summaries only: route, dates, MYR minor-unit amount, baseline/scoring fields, carrier, stops, duration, expiry, and verification timestamps. Do not persist raw Duffel payloads by default.
+
+Production use requires verified Duffel access terms, display rules, retention behavior, rate limits, and sandbox-to-live promotion controls.

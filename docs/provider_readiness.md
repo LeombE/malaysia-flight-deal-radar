@@ -1,6 +1,6 @@
 # Provider Readiness
 
-Phase 6A adds safety guardrails for future real provider integrations. It does not add Skyscanner, Duffel, or any new real provider.
+Phase 6A added safety guardrails for future real provider integrations. Phase 6B adds a Duffel adapter behind those guardrails. Skyscanner is still deferred.
 
 ## Defaults
 
@@ -14,7 +14,7 @@ DEFAULT_REAL_PROVIDER=
 
 These defaults protect local demo runs, tests, dashboard use, cron scans, and admin-triggered scans from accidentally using live API quota.
 
-MockProvider remains the default local/demo provider. Amadeus remains optional fallback only and is disabled unless both Amadeus credentials are configured.
+MockProvider remains the default local/demo provider. Amadeus remains optional fallback only and is disabled unless both Amadeus credentials are configured. Duffel is disabled unless a token is configured and every real-provider guardrail is intentionally opened.
 
 ## Required Before Live Search
 
@@ -50,6 +50,7 @@ The readiness section reports:
 - timeout and retry settings
 - `can_search_live`
 - `can_revalidate_live`
+- `test_mode` for providers that expose safe test-token detection
 - blocking reason codes
 
 It must not expose secret values, admin tokens, Telegram tokens, provider credentials, OAuth tokens, raw provider payloads, or revalidation payloads.
@@ -67,6 +68,10 @@ Common reasons include:
 - `unsupported_retention_mode`
 - `missing_currency_support`
 - `missing_revalidation_support`
+- `unsupported_currency`
+- `revalidation_not_available`
+
+Duffel uses `unsupported_currency` and `revalidation_not_available` when those provider-specific checks fail. A token beginning with `duffel_test_` reports `test_mode=true` without exposing the token.
 
 ## Stale Fare Safety
 

@@ -561,9 +561,9 @@ test("Amadeus missing credentials does not break scheduler through provider regi
     idFactory: idFactory()
   });
 
-  assert.deepEqual(providers.map((provider) => provider.name), ["mock", "amadeus"]);
+  assert.deepEqual(providers.map((provider) => provider.name), ["mock", "amadeus", "duffel"]);
   assert.equal(result.jobsSucceeded, 1);
-  assert.equal(result.jobsSkipped, 1);
+  assert.equal(result.jobsSkipped, 2);
   assert.equal(repository.fareChecks.length, 1);
   assert.equal(repository.jobUpdates.some((entry) => entry.update.status === "provider_disabled"), true);
 });
