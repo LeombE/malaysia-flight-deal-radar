@@ -69,39 +69,81 @@ See `docs/api.md` and `docs/dashboard.md`.
 
 ## Local Runtime
 
-This workspace may not have global `node` or `npm` on PATH. In the Codex desktop environment, Node is available at:
+Use Node.js and npm from Windows PowerShell:
 
 ```powershell
-C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe
+cd "C:\Users\Admin\OneDrive\Documents\flight API real time"
+npm install
+npm run typecheck --if-present
+npm test --if-present
 ```
 
-Run tests directly with:
+Create deterministic demo data and run one MockProvider scan:
 
 ```powershell
-& 'C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --test tests/*.test.ts
+npm run seed
+npm run demo:scan
 ```
 
-Run the lightweight import/type-strip check with:
+Start the local demo server:
 
 ```powershell
-& 'C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' scripts/typecheck.mjs
+npm run dev
 ```
 
-When npm is available, the same commands are exposed as:
+Open the dashboard:
 
 ```powershell
-npm run typecheck
-npm test
+Start-Process "http://localhost:8787/dashboard"
 ```
 
-Apply the D1 schema and seeds in order:
+Verify JSON endpoints:
 
 ```powershell
-wrangler d1 migrations apply <database-name>
+Invoke-RestMethod "http://localhost:8787/health"
+Invoke-RestMethod "http://localhost:8787/api/deals"
 ```
+
+The local demo uses deterministic `MockProvider` data only. It does not require Amadeus, Skyscanner, Duffel, Telegram, or any real provider credentials.
+
+## Local Admin Scan
+
+If `ADMIN_TOKEN` is missing, `POST /api/admin/scan` is disabled:
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8787/api/admin/scan"
+```
+
+To enable it locally, copy `.dev.vars.example` to `.dev.vars`, set a placeholder local token, restart `npm run dev`, then call:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+(Get-Content ".dev.vars") -replace '^ADMIN_TOKEN=.*', 'ADMIN_TOKEN=local-demo-token' | Set-Content ".dev.vars"
+Invoke-RestMethod -Method Post "http://localhost:8787/api/admin/scan" -Headers @{ Authorization = "Bearer local-demo-token" }
+```
+
+Never commit `.dev.vars` or real secrets.
+
+## Cloudflare D1 Setup
+
+`npm run dev` uses the in-memory/JSON demo path. For Cloudflare-style D1 work, copy the example Wrangler config and create a real local D1 binding:
+
+```powershell
+Copy-Item "wrangler.toml.example" "wrangler.toml"
+npx wrangler d1 create malaysia-flight-deal-radar-local
+npx wrangler d1 migrations apply malaysia-flight-deal-radar-local --local
+npx wrangler dev
+```
+
+Update `wrangler.toml` with the database IDs returned by Wrangler. The migrations include the airport seed migration.
 
 ## Environment
 
 Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real secrets.
 
 Amadeus is optional and disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present.
+
+More detail:
+
+- `docs/local_demo.md`
+- `docs/deployment_readiness.md`

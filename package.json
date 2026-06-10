@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node scripts/local-dev.mjs",
+    "seed": "node scripts/demo-seed.mjs",
+    "demo:scan": "node scripts/demo-scan.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --test tests/*.test.ts",
+    "check": "npm run typecheck --if-present && npm test --if-present"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

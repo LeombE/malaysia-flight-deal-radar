@@ -1,3 +1,5 @@
+# Phase 5.5 local demo placeholders only. Leave secrets blank unless testing locally.
+
 # Optional Amadeus fallback provider. Leave blank to keep disabled.
 AMADEUS_CLIENT_ID=
 AMADEUS_CLIENT_SECRET=
@@ -10,7 +12,7 @@ AMADEUS_RETRY_MAX_DELAY_MS=2000
 AMADEUS_MIN_REQUEST_INTERVAL_MS=100
 AMADEUS_MAX_CONCURRENCY=1
 
-# Phase 3 scheduler limits.
+# Local scheduler/demo limits.
 MAX_SEARCHES_PER_CRON_RUN=50
 MAX_PROVIDER_CONCURRENCY=3
 PROVIDER_DAILY_BUDGET=50

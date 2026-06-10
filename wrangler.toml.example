@@ -1,0 +1,12 @@
+name = "malaysia-flight-deal-radar"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[triggers]
+crons = ["0 */6 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "malaysia-flight-deal-radar-local"
+database_id = "replace-with-your-d1-database-id"
+preview_database_id = "replace-with-your-preview-d1-database-id"
