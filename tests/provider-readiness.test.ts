@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseRealProviderConfig } from "../src/config/real-providers.ts";
 import type { SchedulerConfig } from "../src/config/scheduler.ts";
 import { MockProvider } from "../src/providers/mock-provider.ts";
-import { createProviderRegistry } from "../src/providers/registry.ts";
+import { createProviderRegistry, listEnabledProviders } from "../src/providers/registry.ts";
 import { buildProviderReadinessReports } from "../src/providers/readiness.ts";
 import type {
   FlightProvider,
@@ -203,6 +203,8 @@ test("real provider config disables live providers and enables dry-run by defaul
   assert.equal(config.enableRealProviders, false);
   assert.equal(config.realProviderDryRun, true);
   assert.equal(config.defaultRealProvider, null);
+  assert.equal(config.maxRealProviderSearchesPerRun, 1);
+  assert.equal(config.maxRealProviderDailyBudget, 1);
 });
 
 test("readiness blocks live search when real providers are disabled or dry-run is enabled", () => {
@@ -392,4 +394,74 @@ test("provider registry with missing Amadeus credentials remains safe and makes 
   assert.ok(amadeus);
   assert.equal(amadeus.isEnabled(), false);
   assert.equal(health?.status, "disabled");
+});
+
+test("production defaults keep only MockProvider enabled and real providers dry-run protected", () => {
+  const providers = createProviderRegistry({}, {
+    fetch: async () => {
+      throw new Error("unexpected network call");
+    },
+    now: () => NOW.getTime(),
+    sleep: async () => {}
+  });
+  const config = parseRealProviderConfig({});
+  const readiness = buildProviderReadinessReports({ providers, env: {}, config });
+  const enabledProviderNames = listEnabledProviders(providers).map((provider) => provider.name);
+  const mock = readiness.find((provider) => provider.provider_name === "mock");
+  const amadeus = readiness.find((provider) => provider.provider_name === "amadeus");
+  const duffel = readiness.find((provider) => provider.provider_name === "duffel");
+
+  assert.deepEqual(enabledProviderNames, ["mock"]);
+  assert.equal(mock?.demo_ready, true);
+  assert.equal(amadeus?.can_search_live, false);
+  assert.equal(duffel?.can_search_live, false);
+  assert.equal(amadeus?.blocking_reasons.includes("real_providers_disabled"), true);
+  assert.equal(duffel?.blocking_reasons.includes("dry_run_enabled"), true);
+});
+
+test("provider health keeps Cloudflare-style secrets out of deployment responses", async () => {
+  const secretEnv = {
+    ENABLE_REAL_PROVIDERS: "false",
+    REAL_PROVIDER_DRY_RUN: "true",
+    DEFAULT_REAL_PROVIDER: "",
+    ADMIN_TOKEN: "admin-secret-value",
+    TELEGRAM_BOT_TOKEN: "telegram-secret-value",
+    TELEGRAM_CHAT_ID: "telegram-chat-secret",
+    DUFFEL_ACCESS_TOKEN: "duffel_test_secret_value",
+    AMADEUS_CLIENT_ID: "amadeus-client-secretish",
+    AMADEUS_CLIENT_SECRET: "amadeus-secret-value",
+    SKYSCANNER_API_KEY: "future-skyscanner-secret"
+  };
+  const providers = createProviderRegistry(secretEnv, {
+    fetch: async () => {
+      throw new Error("unexpected network call");
+    },
+    now: () => NOW.getTime(),
+    sleep: async () => {}
+  });
+  const realProviderConfig = parseRealProviderConfig(secretEnv);
+  const dependencies: AppDependencies = {
+    apiRepository: new MinimalApiRepository(),
+    providers,
+    schedulerConfig,
+    realProviderConfig,
+    providerReadinessEnv: secretEnv,
+    now: () => NOW
+  };
+
+  const response = await handleAppRequest(new Request("https://radar.test/api/provider-health"), secretEnv, dependencies);
+  const body = await response.json() as { providers: ProviderHealthApiRecord[] };
+  const serialized = JSON.stringify(body);
+
+  assert.equal(response.status, 200);
+  assert.equal(body.providers.some((provider) => provider.provider_name === "mock"), true);
+  for (const secret of Object.values(secretEnv)) {
+    if (secret && secret !== "false" && secret !== "true") {
+      assert.equal(serialized.includes(secret), false);
+    }
+  }
+  assert.equal(serialized.includes("DUFFEL_ACCESS_TOKEN"), false);
+  assert.equal(serialized.includes("AMADEUS_CLIENT_SECRET"), false);
+  assert.equal(serialized.includes("TELEGRAM_BOT_TOKEN"), false);
+  assert.equal(serialized.includes("SKYSCANNER_API_KEY"), false);
 });

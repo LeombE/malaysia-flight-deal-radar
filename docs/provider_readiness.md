@@ -16,6 +16,15 @@ These defaults protect local demo runs, tests, dashboard use, cron scans, and ad
 
 MockProvider remains the default local/demo provider. Amadeus remains optional fallback only and is disabled unless both Amadeus credentials are configured. Duffel is disabled unless a token is configured and every real-provider guardrail is intentionally opened.
 
+The default real-provider quota is intentionally tiny:
+
+```text
+MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1
+MAX_REAL_PROVIDER_DAILY_BUDGET=1
+```
+
+Raise these only after partner terms, rate limits, display permissions, and retention rules are confirmed.
+
 ## Required Before Live Search
 
 A real provider can search live only when all checks pass:
@@ -61,6 +70,8 @@ The readiness section reports:
 
 It must not expose secret values, admin tokens, Telegram tokens, provider credentials, OAuth tokens, raw provider payloads, or revalidation payloads.
 
+In Cloudflare, keep secrets out of `wrangler.toml`. Use `wrangler secret put` for `ADMIN_TOKEN`, Telegram tokens, Duffel, Amadeus, and future provider credentials. `wrangler.toml.example` contains only non-secret defaults.
+
 ## Blocking Reasons
 
 Common reasons include:
@@ -78,6 +89,19 @@ Common reasons include:
 - `revalidation_not_available`
 
 Duffel uses `unsupported_currency` and `revalidation_not_available` when those provider-specific checks fail. A token beginning with `duffel_test_` reports `test_mode=true` without exposing the token.
+
+## Cloudflare Defaults
+
+Production deployments should start with:
+
+```text
+ENABLE_REAL_PROVIDERS=false
+REAL_PROVIDER_DRY_RUN=true
+DEFAULT_REAL_PROVIDER=
+TELEGRAM_DRY_RUN=true
+```
+
+This lets `/health`, `/api/provider-health`, `/api/deals`, the dashboard, and cron smoke checks run without real provider calls. If a provider needs to be rolled back, restore these values and redeploy.
 
 ## Duffel Smoke Gates
 
@@ -104,3 +128,5 @@ npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --r
 ## Stale Fare Safety
 
 Cached or stale fares are not live fares. The dashboard can show stale data only with warning state, and alerts/deep-link display require fresh revalidation. This remains true after real providers are added.
+
+Skyscanner is still deferred until partner API access, retention rules, display rules, and rate limits are confirmed.

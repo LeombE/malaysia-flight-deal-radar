@@ -1,8 +1,10 @@
 # Deployment Readiness
 
-Phase 5.5 prepares the repository for local verification and Cloudflare Worker deployment setup. It is not a real-provider launch phase.
+Phase 7A prepares the repository for Cloudflare Worker and D1 deployment smoke checks. It is not a real-provider launch phase.
 
-Phase 6A adds real-provider readiness guardrails. Phase 6B adds a guarded Duffel adapter, and Phase 6C adds optional Duffel sandbox smoke tooling. Real providers are still off by default and dry-run protected.
+Phase 6A added real-provider readiness guardrails. Phase 6B added a guarded Duffel adapter, and Phase 6C/6D added optional Duffel sandbox smoke tooling. Real providers are still off by default and dry-run protected.
+
+For the full Cloudflare command guide, see `docs/cloudflare_deployment.md`.
 
 ## Current Runtime Surfaces
 
@@ -14,29 +16,45 @@ Phase 6A adds real-provider readiness guardrails. Phase 6B adds a guarded Duffel
 - Optional Duffel sandbox smoke: `npm run duffel:smoke`
 - Verification bundle: `npm run check`
 
-## Wrangler Setup
+## Cloudflare Setup Summary
 
-Copy the example config:
+Copy the example config, create D1, paste returned IDs into local `wrangler.toml`, then apply migrations:
 
 ```powershell
 Copy-Item "wrangler.toml.example" "wrangler.toml"
+npx wrangler d1 create malaysia-flight-deal-radar
+npx wrangler d1 migrations apply malaysia-flight-deal-radar --local
+npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote
 ```
 
-Create and bind D1:
+Verify tables:
 
 ```powershell
-npx wrangler d1 create malaysia-flight-deal-radar-local
+npx wrangler d1 execute malaysia-flight-deal-radar --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+npx wrangler d1 execute malaysia-flight-deal-radar --remote --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 ```
 
-Paste the returned IDs into `wrangler.toml`, then apply migrations locally:
+The D1 binding is `DB`. The migrations include the airport and route seed data.
 
-```powershell
-npx wrangler d1 migrations apply malaysia-flight-deal-radar-local --local
+## Production Safety Defaults
+
+Keep these enabled in `wrangler.toml` until provider terms and quotas are approved:
+
+```text
+ENABLE_REAL_PROVIDERS=false
+REAL_PROVIDER_DRY_RUN=true
+DEFAULT_REAL_PROVIDER=
+MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1
+MAX_REAL_PROVIDER_DAILY_BUDGET=1
+TELEGRAM_DRY_RUN=true
 ```
 
-Run the Worker with Wrangler:
+MockProvider remains available for demo data. Amadeus is optional/fallback only. Duffel is optional and quota-limited. Skyscanner remains deferred until access and display/retention terms are confirmed.
+
+## Wrangler Dev
 
 ```powershell
+npm run check
 npx wrangler dev
 ```
 
@@ -65,9 +83,20 @@ Keep these values server-side only:
 - `AMADEUS_CLIENT_ID`
 - `AMADEUS_CLIENT_SECRET`
 - `DUFFEL_ACCESS_TOKEN`
-- future provider credentials
+- future `SKYSCANNER_API_KEY`
 
-Use `.dev.vars` locally and Cloudflare secrets for deployed environments. Do not commit `.dev.vars`, real tokens, or provider credentials.
+Use `.dev.vars` locally and Cloudflare secrets for deployed environments. Do not commit `.dev.vars`, `.env`, real tokens, or provider credentials.
+
+```powershell
+npx wrangler secret put ADMIN_TOKEN
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_CHAT_ID
+npx wrangler secret put DUFFEL_ACCESS_TOKEN
+npx wrangler secret put AMADEUS_CLIENT_ID
+npx wrangler secret put AMADEUS_CLIENT_SECRET
+```
+
+Do not put these values in `wrangler.toml`.
 
 ## Smoke Checks
 
@@ -79,7 +108,44 @@ Invoke-RestMethod "http://localhost:8787/api/deals"
 Start-Process "http://localhost:8787/dashboard"
 ```
 
-Admin scan should be disabled when `ADMIN_TOKEN` is blank and should reject a wrong bearer token when configured.
+After deployment, replace the base URL with your Workers URL and run the same smoke checks:
+
+```powershell
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+Invoke-RestMethod "$base/health"
+Invoke-RestMethod "$base/api/provider-health"
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
+
+Admin scan should be disabled when `ADMIN_TOKEN` is blank and should reject a wrong bearer token when configured:
+
+```powershell
+Invoke-RestMethod -Method Post "$base/api/admin/scan"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer wrong-token" }
+```
+
+## Cron Triggers
+
+`wrangler.toml.example` schedules scans every six hours in UTC:
+
+```toml
+[triggers]
+crons = ["0 */6 * * *"]
+```
+
+To disable scheduled scans, deploy with:
+
+```toml
+[triggers]
+crons = []
+```
+
+Local Wrangler cron testing:
+
+```powershell
+Invoke-RestMethod "http://localhost:8787/cdn-cgi/handler/scheduled?format=json"
+```
 
 ## Duffel Sandbox Smoke
 
@@ -116,3 +182,16 @@ Before promoting any real provider beyond optional smoke tooling, confirm:
 - `DEFAULT_REAL_PROVIDER` is explicitly set
 
 Do not make Amadeus the only provider. Do not add Skyscanner until partner access and compliance constraints are explicitly approved. Duffel remains optional and quota-limited until production terms, retention, rate limits, and display rules are verified.
+
+## Rollback
+
+To make the deployed Worker inert from real-provider perspective, set safe vars back to:
+
+```text
+ENABLE_REAL_PROVIDERS=false
+REAL_PROVIDER_DRY_RUN=true
+DEFAULT_REAL_PROVIDER=
+TELEGRAM_DRY_RUN=true
+```
+
+Then redeploy. To stop cron-triggered scans, deploy with `crons = []`. Rotate provider credentials at the provider if a secret is suspected to be exposed.

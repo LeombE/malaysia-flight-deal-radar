@@ -2,11 +2,35 @@ name = "malaysia-flight-deal-radar"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
+# Safe non-secret defaults. Put real secrets in Cloudflare secrets, not here.
+[vars]
+ENABLE_REAL_PROVIDERS = "false"
+REAL_PROVIDER_DRY_RUN = "true"
+DEFAULT_REAL_PROVIDER = ""
+MAX_REAL_PROVIDER_SEARCHES_PER_RUN = "1"
+MAX_REAL_PROVIDER_DAILY_BUDGET = "1"
+REAL_PROVIDER_TIMEOUT_MS = "10000"
+REAL_PROVIDER_RETRY_LIMIT = "2"
+REVALIDATE_BEFORE_DISPLAY_MINUTES = "15"
+REVALIDATE_BEFORE_ALERT_MINUTES = "30"
+MAX_SEARCHES_PER_CRON_RUN = "25"
+MAX_PROVIDER_CONCURRENCY = "2"
+PROVIDER_DAILY_BUDGET = "25"
+PROVIDER_FAILURE_DEGRADE_THRESHOLD = "3"
+TELEGRAM_DRY_RUN = "true"
+DUFFEL_RETENTION_MODE = "NO_CACHE"
+DUFFEL_API_BASE_URL = "https://api.duffel.com"
+DUFFEL_API_VERSION = "v2"
+DUFFEL_CURRENCY_CODE = "MYR"
+AMADEUS_BASE_URL = "https://test.api.amadeus.com"
+AMADEUS_CURRENCY_CODE = "MYR"
+AMADEUS_RETENTION_MODE = "NO_CACHE"
+
 [triggers]
 crons = ["0 */6 * * *"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "malaysia-flight-deal-radar-local"
+database_name = "malaysia-flight-deal-radar"
 database_id = "replace-with-your-d1-database-id"
 preview_database_id = "replace-with-your-preview-d1-database-id"

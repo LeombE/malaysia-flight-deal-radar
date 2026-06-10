@@ -154,20 +154,74 @@ Never commit `.dev.vars` or real secrets.
 
 ## Cloudflare D1 Setup
 
-`npm run dev` uses the in-memory/JSON demo path. For Cloudflare-style D1 work, copy the example Wrangler config and create a real local D1 binding:
+`npm run dev` uses the in-memory/JSON demo path. For Cloudflare Worker and D1 setup, copy the example Wrangler config, create D1, apply migrations, and verify the tables:
 
 ```powershell
 Copy-Item "wrangler.toml.example" "wrangler.toml"
-npx wrangler d1 create malaysia-flight-deal-radar-local
-npx wrangler d1 migrations apply malaysia-flight-deal-radar-local --local
+npx wrangler d1 create malaysia-flight-deal-radar
+npx wrangler d1 migrations apply malaysia-flight-deal-radar --local
+npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote
+npx wrangler d1 execute malaysia-flight-deal-radar --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
 npx wrangler dev
 ```
 
-Update `wrangler.toml` with the database IDs returned by Wrangler. The migrations include the airport seed migration.
+Update your uncommitted `wrangler.toml` with the database IDs returned by Wrangler. The D1 binding is `DB`, and migrations include the airport/route seed data.
+
+Local smoke checks with Wrangler:
+
+```powershell
+$base = "http://localhost:8787"
+Invoke-RestMethod "$base/health"
+Invoke-RestMethod "$base/api/provider-health"
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+Invoke-RestMethod "http://localhost:8787/cdn-cgi/handler/scheduled?format=json"
+```
+
+Optional deployment smoke:
+
+```powershell
+npm run check
+npx wrangler deploy --dry-run
+npx wrangler deploy
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+Invoke-RestMethod "$base/health"
+Invoke-RestMethod "$base/api/provider-health"
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
 
 ## Environment
 
 Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real secrets.
+
+For Cloudflare deployments, do not put secrets in `wrangler.toml`. Set them with:
+
+```powershell
+npx wrangler secret put ADMIN_TOKEN
+npx wrangler secret put TELEGRAM_BOT_TOKEN
+npx wrangler secret put TELEGRAM_CHAT_ID
+npx wrangler secret put DUFFEL_ACCESS_TOKEN
+npx wrangler secret put AMADEUS_CLIENT_ID
+npx wrangler secret put AMADEUS_CLIENT_SECRET
+```
+
+Future provider key:
+
+```powershell
+npx wrangler secret put SKYSCANNER_API_KEY
+```
+
+Production safety defaults should remain:
+
+```text
+ENABLE_REAL_PROVIDERS=false
+REAL_PROVIDER_DRY_RUN=true
+DEFAULT_REAL_PROVIDER=
+MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1
+MAX_REAL_PROVIDER_DAILY_BUDGET=1
+TELEGRAM_DRY_RUN=true
+```
 
 Duffel and Amadeus are optional. Amadeus is disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present. Duffel is disabled unless `DUFFEL_ACCESS_TOKEN` is present and every real-provider guardrail allows it.
 
@@ -228,6 +282,7 @@ If any guard is missing, `npm run duffel:smoke` prints blocking reasons and make
 More detail:
 
 - `docs/local_demo.md`
+- `docs/cloudflare_deployment.md`
 - `docs/deployment_readiness.md`
 - `docs/provider_readiness.md`
 - `docs/provider_selection.md`
