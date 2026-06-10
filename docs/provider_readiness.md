@@ -93,6 +93,14 @@ Duffel uses `unsupported_currency` and `revalidation_not_available` when those p
 
 When blocked, it prints reason codes and makes no Duffel network call.
 
+The smoke route can be set with `DUFFEL_SMOKE_ORIGIN`, `DUFFEL_SMOKE_DESTINATION`, `DUFFEL_SMOKE_DEPARTURE_DATE`, `DUFFEL_SMOKE_RETURN_DATE`, `DUFFEL_SMOKE_CABIN_CLASS`, `DUFFEL_SMOKE_ADULTS`, and `DUFFEL_SMOKE_CURRENCY`, or by CLI flags. Defaults remain safe: round-trip economy, one adult, MYR.
+
+If a smoke call succeeds but returns zero offers, this is reported as `no_offers_returned`, not as a credential failure. `provider:check` can show the last sanitized smoke status. For adapter normalization checks, try the Duffel Airways sandbox profile:
+
+```powershell
+npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --return-date 2026-09-06
+```
+
 ## Stale Fare Safety
 
 Cached or stale fares are not live fares. The dashboard can show stale data only with warning state, and alerts/deep-link display require fresh revalidation. This remains true after real providers are added.

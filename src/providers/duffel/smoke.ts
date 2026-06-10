@@ -5,6 +5,8 @@ import { buildProviderReadinessReports, type ProviderReadinessReport } from "../
 import type { ProviderOffer, SearchRoundTripInput } from "../types.ts";
 import { DuffelProvider } from "./duffel-provider.ts";
 
+export type DuffelSmokeProfile = "default" | "duffel-airways";
+
 export type DuffelSmokeBlockingReason =
   | "credentials_missing"
   | "real_providers_disabled"
@@ -15,31 +17,41 @@ export type DuffelSmokeBlockingReason =
   | "unsafe_daily_budget"
   | "unsupported_currency"
   | "unsupported_retention_mode"
+  | "unsupported_cabin_class"
+  | "unsupported_adult_count"
   | "invalid_smoke_route";
 
 export interface DuffelSmokeInput {
+  profile: DuffelSmokeProfile;
   originIata: string;
   destinationIata: string;
   departureDate: string;
   returnDate: string;
+  cabinClass: string;
+  adults: number;
+  currency: string;
 }
 
 export interface DuffelSmokeSummary {
   provider: "duffel";
+  profile: DuffelSmokeProfile;
   origin: string;
   destination: string;
   departure_date: string;
   return_date: string;
-  cabin: "economy";
-  adults: 1;
-  currency: "MYR";
+  cabin: string;
+  adults: number;
+  currency: string;
+  api_call_succeeded: boolean;
   offers_returned: number;
+  no_offers_returned: boolean;
   price_myr: string | null;
   carrier: string | null;
   stops: number | null;
   duration_minutes: number | null;
   expires_at: string | null;
   last_revalidated_at: string | null;
+  diagnostics: string[];
   readiness_status: {
     enabled: boolean;
     can_search_live: boolean;
@@ -65,6 +77,25 @@ export interface DuffelSmokeOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+export interface DuffelSmokeStatusRecord {
+  provider_name: "duffel";
+  status: "blocked" | "failed" | "succeeded" | "no_offers_returned";
+  offers_returned: number | null;
+  checked_at: string;
+  origin: string;
+  destination: string;
+  departure_date: string;
+  return_date: string;
+}
+
+const DUFFEL_AIRWAYS_PROFILE = {
+  originIata: "LHR",
+  destinationIata: "JFK",
+  cabinClass: "economy",
+  adults: 1,
+  currency: "MYR"
+} as const;
+
 function addDaysIso(nowMs: number, days: number): string {
   return new Date(nowMs + days * 86_400_000).toISOString().slice(0, 10);
 }
@@ -73,12 +104,50 @@ function normalizeIata(value: string | undefined, fallback: string): string {
   return (value || fallback).trim().toUpperCase();
 }
 
-function resolveInput(input: Partial<DuffelSmokeInput> | undefined, env: Record<string, string | undefined>, nowMs: number): DuffelSmokeInput {
+function normalizeCurrency(value: string | undefined, fallback: string): string {
+  return (value || fallback).trim().toUpperCase();
+}
+
+function normalizeCabin(value: string | undefined, fallback: string): string {
+  return (value || fallback).trim().toLowerCase();
+}
+
+function parseAdults(value: string | number | undefined, fallback: number): number {
+  if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : fallback;
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeProfile(value: string | undefined): DuffelSmokeProfile {
+  return value?.trim().toLowerCase() === "duffel-airways" ? "duffel-airways" : "default";
+}
+
+export function resolveDuffelSmokeInput(
+  input: Partial<DuffelSmokeInput> | undefined,
+  env: Record<string, string | undefined>,
+  nowMs: number
+): DuffelSmokeInput {
+  const profile = input?.profile ?? normalizeProfile(env.DUFFEL_SMOKE_PROFILE);
+  const profileDefaults = profile === "duffel-airways"
+    ? DUFFEL_AIRWAYS_PROFILE
+    : {
+        originIata: "KUL",
+        destinationIata: "SIN",
+        cabinClass: "economy",
+        adults: 1,
+        currency: "MYR"
+      };
+
   return {
-    originIata: normalizeIata(input?.originIata ?? env.DUFFEL_SMOKE_ORIGIN, "KUL"),
-    destinationIata: normalizeIata(input?.destinationIata ?? env.DUFFEL_SMOKE_DESTINATION, "SIN"),
+    profile,
+    originIata: normalizeIata(input?.originIata ?? env.DUFFEL_SMOKE_ORIGIN, profileDefaults.originIata),
+    destinationIata: normalizeIata(input?.destinationIata ?? env.DUFFEL_SMOKE_DESTINATION, profileDefaults.destinationIata),
     departureDate: input?.departureDate ?? env.DUFFEL_SMOKE_DEPARTURE_DATE ?? addDaysIso(nowMs, 90),
-    returnDate: input?.returnDate ?? env.DUFFEL_SMOKE_RETURN_DATE ?? addDaysIso(nowMs, 95)
+    returnDate: input?.returnDate ?? env.DUFFEL_SMOKE_RETURN_DATE ?? addDaysIso(nowMs, 95),
+    cabinClass: normalizeCabin(input?.cabinClass ?? env.DUFFEL_SMOKE_CABIN_CLASS, profileDefaults.cabinClass),
+    adults: parseAdults(input?.adults ?? env.DUFFEL_SMOKE_ADULTS, profileDefaults.adults),
+    currency: normalizeCurrency(input?.currency ?? env.DUFFEL_SMOKE_CURRENCY, profileDefaults.currency)
   };
 }
 
@@ -102,13 +171,21 @@ function routeIsValid(input: DuffelSmokeInput, nowMs: number): boolean {
   return departure > today && returning > departure;
 }
 
+function effectiveDuffelEnv(env: Record<string, string | undefined>, route: DuffelSmokeInput): Record<string, string | undefined> {
+  return {
+    ...env,
+    DUFFEL_CURRENCY_CODE: route.currency
+  };
+}
+
 function smokeGuards(input: {
   env: Record<string, string | undefined>;
   route: DuffelSmokeInput;
   nowMs: number;
 }): DuffelSmokeBlockingReason[] {
-  const realConfig = parseRealProviderConfig(input.env);
-  const duffelConfig = parseDuffelConfig(input.env);
+  const effectiveEnv = effectiveDuffelEnv(input.env, input.route);
+  const realConfig = parseRealProviderConfig(effectiveEnv);
+  const duffelConfig = parseDuffelConfig(effectiveEnv);
   const reasons: DuffelSmokeBlockingReason[] = [];
 
   if (!realConfig.enableRealProviders) reasons.push("real_providers_disabled");
@@ -122,6 +199,10 @@ function smokeGuards(input: {
   }
   if (duffelConfig.currencyCode !== "MYR") reasons.push("unsupported_currency");
   if (duffelConfig.retentionMode !== "NO_CACHE") reasons.push("unsupported_retention_mode");
+  if (input.route.cabinClass !== "economy") reasons.push("unsupported_cabin_class");
+  if (!Number.isInteger(input.route.adults) || input.route.adults < 1 || input.route.adults > 4) {
+    reasons.push("unsupported_adult_count");
+  }
   if (!routeIsValid(input.route, input.nowMs)) reasons.push("invalid_smoke_route");
 
   return [...new Set(reasons)];
@@ -130,14 +211,17 @@ function smokeGuards(input: {
 function readinessForDuffel(input: {
   env: Record<string, string | undefined>;
   provider: DuffelProvider;
+  route: DuffelSmokeInput;
 }): ProviderReadinessReport | null {
+  const effectiveEnv = effectiveDuffelEnv(input.env, input.route);
+  const realConfig = parseRealProviderConfig(effectiveEnv);
   const reports = buildProviderReadinessReports({
     providers: [input.provider],
-    env: input.env,
-    config: parseRealProviderConfig(input.env),
+    env: effectiveEnv,
+    config: realConfig,
     providerLimits: [{
       providerName: "duffel",
-      dailyBudget: parseRealProviderConfig(input.env).maxRealProviderDailyBudget,
+      dailyBudget: realConfig.maxRealProviderDailyBudget,
       usedToday: 0
     }]
   });
@@ -153,6 +237,15 @@ function readinessStatus(readiness: ProviderReadinessReport | null): DuffelSmoke
   };
 }
 
+function noOfferDiagnostics(route: DuffelSmokeInput): string[] {
+  return [
+    "API call succeeded.",
+    "No offers returned.",
+    "This is likely a Duffel sandbox route/date availability issue, not a provider credential failure.",
+    `Try the Duffel Airways sandbox profile: --profile duffel-airways --origin LHR --destination JFK --departure-date ${route.departureDate} --return-date ${route.returnDate}.`
+  ];
+}
+
 function offerSummary(input: {
   route: DuffelSmokeInput;
   offersReturned: number;
@@ -163,20 +256,24 @@ function offerSummary(input: {
   const displayOffer = input.revalidatedOffer ?? input.offer;
   return {
     provider: "duffel",
+    profile: input.route.profile,
     origin: input.route.originIata,
     destination: input.route.destinationIata,
     departure_date: input.route.departureDate,
     return_date: input.route.returnDate,
-    cabin: "economy",
-    adults: 1,
-    currency: "MYR",
+    cabin: input.route.cabinClass,
+    adults: input.route.adults,
+    currency: input.route.currency,
+    api_call_succeeded: true,
     offers_returned: input.offersReturned,
+    no_offers_returned: input.offersReturned === 0,
     price_myr: displayOffer ? `RM${formatMyrFromMinor(displayOffer.price.amountMinor) ?? "0.00"}` : null,
     carrier: displayOffer?.carriers.join(", ") || null,
     stops: displayOffer?.totalStops ?? null,
     duration_minutes: displayOffer?.durationMinutes ?? null,
     expires_at: displayOffer?.expiresAt ?? null,
     last_revalidated_at: input.revalidatedOffer?.lastVerifiedAt ?? null,
+    diagnostics: input.offersReturned === 0 ? noOfferDiagnostics(input.route) : [],
     readiness_status: readinessStatus(input.readiness)
   };
 }
@@ -185,6 +282,7 @@ function formatBlocked(reasons: readonly DuffelSmokeBlockingReason[], readiness:
   return [
     "Duffel smoke blocked.",
     `Route: ${route.originIata}-${route.destinationIata} ${route.departureDate} to ${route.returnDate}`,
+    `Profile: ${route.profile}, cabin=${route.cabinClass}, adults=${route.adults}, currency=${route.currency}`,
     "Blocking reasons:",
     ...reasons.map((reason) => `- ${reason}`),
     `Readiness: enabled=${readiness?.enabled ?? false}, can_search_live=${readiness?.can_search_live ?? false}, can_revalidate_live=${readiness?.can_revalidate_live ?? false}`,
@@ -193,32 +291,68 @@ function formatBlocked(reasons: readonly DuffelSmokeBlockingReason[], readiness:
 }
 
 function formatSummary(summary: DuffelSmokeSummary): string {
-  return [
+  const lines = [
     "Duffel smoke complete.",
     JSON.stringify(summary, null, 2)
-  ].join("\n");
+  ];
+  if (summary.no_offers_returned) {
+    lines.push("Diagnostics:");
+    lines.push(...summary.diagnostics.map((message) => `- ${message}`));
+  }
+  return lines.join("\n");
 }
 
 function formatFailure(message: string, readiness: ProviderReadinessReport | null, route: DuffelSmokeInput): string {
   return [
     "Duffel smoke failed.",
     `Route: ${route.originIata}-${route.destinationIata} ${route.departureDate} to ${route.returnDate}`,
+    `Profile: ${route.profile}, cabin=${route.cabinClass}, adults=${route.adults}, currency=${route.currency}`,
     `Readiness: enabled=${readiness?.enabled ?? false}, can_search_live=${readiness?.can_search_live ?? false}, can_revalidate_live=${readiness?.can_revalidate_live ?? false}`,
     `Error: ${message}`
   ].join("\n");
 }
 
+export function duffelSmokeStatusFromResult(result: DuffelSmokeResult, checkedAt: string): DuffelSmokeStatusRecord {
+  const summary = result.summary;
+  const route = summary
+    ? {
+        origin: summary.origin,
+        destination: summary.destination,
+        departure_date: summary.departure_date,
+        return_date: summary.return_date
+      }
+    : {
+        origin: "",
+        destination: "",
+        departure_date: "",
+        return_date: ""
+      };
+  return {
+    provider_name: "duffel",
+    status: result.ok
+      ? (summary?.offers_returned === 0 ? "no_offers_returned" : "succeeded")
+      : (result.blockingReasons.length > 0 ? "blocked" : "failed"),
+    offers_returned: summary?.offers_returned ?? null,
+    checked_at: checkedAt,
+    origin: route.origin,
+    destination: route.destination,
+    departure_date: route.departure_date,
+    return_date: route.return_date
+  };
+}
+
 export async function runDuffelSmoke(options: DuffelSmokeOptions): Promise<DuffelSmokeResult> {
   const now = options.now ?? Date.now;
   const nowMs = now();
-  const route = resolveInput(options.input, options.env, nowMs);
-  const realConfig = parseRealProviderConfig(options.env);
-  const duffelConfig = parseDuffelConfig(options.env);
+  const route = resolveDuffelSmokeInput(options.input, options.env, nowMs);
+  const effectiveEnv = effectiveDuffelEnv(options.env, route);
+  const realConfig = parseRealProviderConfig(effectiveEnv);
+  const duffelConfig = parseDuffelConfig(effectiveEnv);
   const providerDeps: { fetch?: typeof fetch; now: () => number; sleep?: (ms: number) => Promise<void> } = { now };
   if (options.fetch) providerDeps.fetch = options.fetch;
   if (options.sleep) providerDeps.sleep = options.sleep;
   const provider = new DuffelProvider(duffelConfig, realConfig, providerDeps);
-  const readiness = readinessForDuffel({ env: options.env, provider });
+  const readiness = readinessForDuffel({ env: options.env, provider, route });
   const blockingReasons = smokeGuards({ env: options.env, route, nowMs });
 
   if (blockingReasons.length > 0) {
@@ -238,7 +372,7 @@ export async function runDuffelSmoke(options: DuffelSmokeOptions): Promise<Duffe
       destinationIata: route.destinationIata,
       departureDate: route.departureDate,
       returnDate: route.returnDate,
-      adults: 1,
+      adults: route.adults,
       maxOffers: 5
     };
     const offers = await provider.searchRoundTripOffers(searchInput);

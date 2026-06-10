@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildProviderCheckReport, formatProviderCheckReport } from "../src/providers/provider-check.ts";
-import { runDuffelSmoke } from "../src/providers/duffel/smoke.ts";
+import { resolveDuffelSmokeInput, runDuffelSmoke } from "../src/providers/duffel/smoke.ts";
 
 const NOW = Date.parse("2026-06-11T08:00:00.000Z");
 const TEST_TOKEN = "duffel_test_secret_token";
@@ -83,6 +83,56 @@ function jsonResponse(body: unknown, status = 200): Response {
     headers: { "Content-Type": "application/json" }
   });
 }
+
+test("smoke route env vars override defaults", () => {
+  const input = resolveDuffelSmokeInput(undefined, {
+    DUFFEL_SMOKE_ORIGIN: "hnd",
+    DUFFEL_SMOKE_DESTINATION: "tpe",
+    DUFFEL_SMOKE_DEPARTURE_DATE: "2026-10-01",
+    DUFFEL_SMOKE_RETURN_DATE: "2026-10-08",
+    DUFFEL_SMOKE_CABIN_CLASS: "ECONOMY",
+    DUFFEL_SMOKE_ADULTS: "2",
+    DUFFEL_SMOKE_CURRENCY: "myr"
+  }, NOW);
+
+  assert.deepEqual(input, {
+    profile: "default",
+    originIata: "HND",
+    destinationIata: "TPE",
+    departureDate: "2026-10-01",
+    returnDate: "2026-10-08",
+    cabinClass: "economy",
+    adults: 2,
+    currency: "MYR"
+  });
+});
+
+test("Duffel Airways test route profile builds LHR-JFK request safely", async () => {
+  let requestBody: unknown;
+  const result = await runDuffelSmoke({
+    env: safeEnv({
+      DUFFEL_SMOKE_PROFILE: "duffel-airways",
+      DUFFEL_SMOKE_DEPARTURE_DATE: "2026-10-01",
+      DUFFEL_SMOKE_RETURN_DATE: "2026-10-08"
+    }),
+    now: () => NOW,
+    fetch: async (_url, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({ data: { offers: [] } });
+    }
+  });
+
+  const data = (requestBody as { data: { slices: unknown[]; cabin_class: string; passengers: unknown[] } }).data;
+  assert.equal(result.ok, true);
+  assert.equal(result.summary?.origin, "LHR");
+  assert.equal(result.summary?.destination, "JFK");
+  assert.deepEqual(data.slices, [
+    { origin: "LHR", destination: "JFK", departure_date: "2026-10-01" },
+    { origin: "JFK", destination: "LHR", departure_date: "2026-10-08" }
+  ]);
+  assert.equal(data.cabin_class, "economy");
+  assert.deepEqual(data.passengers, [{ type: "adult" }]);
+});
 
 test("duffel smoke refuses without ENABLE_REAL_PROVIDERS=true and makes no network call", async () => {
   let calls = 0;
@@ -179,6 +229,16 @@ test("provider check prints readiness without secrets", () => {
       AMADEUS_CLIENT_ID: "amadeus-client-id",
       AMADEUS_CLIENT_SECRET: "amadeus-secret"
     }),
+    lastSmoke: [{
+      provider_name: "duffel",
+      status: "no_offers_returned",
+      offers_returned: 0,
+      checked_at: "2026-06-11T08:05:00.000Z",
+      origin: "KUL",
+      destination: "SIN",
+      departure_date: "2026-09-01",
+      return_date: "2026-09-06"
+    }],
     now: () => NOW
   });
   const output = formatProviderCheckReport(records);
@@ -190,6 +250,32 @@ test("provider check prints readiness without secrets", () => {
   assert.equal(output.includes("amadeus-secret"), false);
   assert.match(output, /can_search_live:/);
   assert.match(output, /blocking_reasons:/);
+  assert.match(output, /readiness_passed:/);
+  assert.match(output, /last_smoke: no_offers_returned, offers_returned=0/);
+});
+
+test("no-offers smoke response is successful and not a credential failure", async () => {
+  let calls = 0;
+  const result = await runDuffelSmoke({
+    env: safeEnv(),
+    input: safeRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      calls += 1;
+      return jsonResponse({ data: { offers: [] } });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls, 1);
+  assert.equal(result.summary?.offers_returned, 0);
+  assert.equal(result.summary?.no_offers_returned, true);
+  assert.match(result.output, /API call succeeded/);
+  assert.match(result.output, /No offers returned/);
+  assert.match(result.output, /sandbox route\/date availability issue/);
+  assert.match(result.output, /not a provider credential failure/);
+  assert.match(result.output, /Duffel Airways sandbox profile/);
 });
 
 test("duffel smoke output does not include raw provider payload", async () => {

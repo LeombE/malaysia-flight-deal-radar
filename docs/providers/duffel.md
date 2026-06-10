@@ -102,6 +102,23 @@ The smoke script is optional and quota-limited. It refuses to call Duffel unless
 - `MAX_REAL_PROVIDER_DAILY_BUDGET` is between `1` and `3`
 - route dates are valid future dates
 
+The default route is `KUL` to `SIN`. Duffel sandbox data may return `offers_returned=0` for this market, and that is not automatically a credential failure. When the API call succeeds with zero offers, the script prints diagnostics that suggest trying the Duffel Airways test route profile.
+
+Optional smoke route environment variables:
+
+- `DUFFEL_SMOKE_PROFILE`
+- `DUFFEL_SMOKE_ORIGIN`
+- `DUFFEL_SMOKE_DESTINATION`
+- `DUFFEL_SMOKE_DEPARTURE_DATE`
+- `DUFFEL_SMOKE_RETURN_DATE`
+- `DUFFEL_SMOKE_CABIN_CLASS`
+- `DUFFEL_SMOKE_ADULTS`
+- `DUFFEL_SMOKE_CURRENCY`
+
+Supported profile:
+
+- `duffel-airways`: round trip `LHR` to `JFK`, economy, one adult, configurable future dates
+
 Prepare `.dev.vars` locally only:
 
 ```powershell
@@ -121,7 +138,15 @@ npm run provider:check
 npm run duffel:smoke -- --origin KUL --destination SIN --departure-date 2026-09-01 --return-date 2026-09-06
 ```
 
+To try the documented Duffel Airways sandbox profile:
+
+```powershell
+npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --return-date 2026-09-06
+```
+
 The smoke output is normalized only: provider, route, dates, MYR price if returned, carrier, stops, duration, expiry, revalidation time, and readiness status. It does not print the raw Duffel response, access token, Authorization header, or passenger personal data.
+
+`provider:check` also reports the last sanitized smoke status when available, including `no_offers_returned` so a successful zero-offer smoke is not confused with failed credentials.
 
 After the smoke test, switch dry-run back on:
 

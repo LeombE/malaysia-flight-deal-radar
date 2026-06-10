@@ -215,6 +215,14 @@ npm run provider:check
 npm run duffel:smoke -- --origin KUL --destination SIN --departure-date 2026-09-01 --return-date 2026-09-06
 ```
 
+If `KUL-SIN` returns `offers_returned=0`, treat that as a successful API call with no sandbox inventory, not a credential failure. To try the Duffel Airways sandbox profile instead:
+
+```powershell
+npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --return-date 2026-09-06
+```
+
+Optional smoke env vars are `DUFFEL_SMOKE_ORIGIN`, `DUFFEL_SMOKE_DESTINATION`, `DUFFEL_SMOKE_DEPARTURE_DATE`, `DUFFEL_SMOKE_RETURN_DATE`, `DUFFEL_SMOKE_CABIN_CLASS`, `DUFFEL_SMOKE_ADULTS`, and `DUFFEL_SMOKE_CURRENCY`.
+
 If any guard is missing, `npm run duffel:smoke` prints blocking reasons and makes no Duffel call. After the smoke test, set `REAL_PROVIDER_DRY_RUN=true` again. Skyscanner remains deferred until partner API access and display/retention rules are confirmed.
 
 More detail:
