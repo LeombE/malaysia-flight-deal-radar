@@ -1,0 +1,14 @@
+{
+  "name": "malaysia-flight-deal-radar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "node scripts/typecheck.mjs",
+    "test": "node --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
+
