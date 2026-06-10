@@ -1,4 +1,5 @@
-name = "malaysia-flight-deal-radar"
+# Replace this with your Cloudflare Worker name if desired.
+name = "malaysia-flight-deal-radar-demo"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 

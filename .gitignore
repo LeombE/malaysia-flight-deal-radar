@@ -1,6 +1,7 @@
 ﻿node_modules/
 dist/
 .wrangler/
+wrangler.toml
 demo-data/
 .dev.vars
 .dev.vars.*

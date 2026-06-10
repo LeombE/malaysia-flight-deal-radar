@@ -15,16 +15,24 @@ For the full Cloudflare command guide, see `docs/cloudflare_deployment.md`.
 - Provider readiness CLI: `npm run provider:check`
 - Optional Duffel sandbox smoke: `npm run duffel:smoke`
 - Verification bundle: `npm run check`
+- Cloudflare config check: `npm run cf:check`
+- Wrangler dev: `npm run cf:dev`
+- D1 local migrations: `npm run cf:d1:migrate:local`
+- D1 remote migrations: `npm run cf:d1:migrate:remote`
+- Dry deploy: `npm run cf:deploy:dry`
+- Deploy: `npm run cf:deploy`
 
 ## Cloudflare Setup Summary
 
 Copy the example config, create D1, paste returned IDs into local `wrangler.toml`, then apply migrations:
 
 ```powershell
+npm run cf:check
 Copy-Item "wrangler.toml.example" "wrangler.toml"
+npm run cf:d1:create:note
 npx wrangler d1 create malaysia-flight-deal-radar
-npx wrangler d1 migrations apply malaysia-flight-deal-radar --local
-npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote
+npm run cf:d1:migrate:local
+npm run cf:d1:migrate:remote
 ```
 
 Verify tables:
@@ -55,7 +63,7 @@ MockProvider remains available for demo data. Amadeus is optional/fallback only.
 
 ```powershell
 npm run check
-npx wrangler dev
+npm run cf:dev
 ```
 
 The repository does not require real provider credentials for local verification. If Amadeus or Duffel credentials are missing, those providers remain disabled.
@@ -87,13 +95,21 @@ Keep these values server-side only:
 
 Use `.dev.vars` locally and Cloudflare secrets for deployed environments. Do not commit `.dev.vars`, `.env`, real tokens, or provider credentials.
 
+For the first mock/demo deployment, do not set `DUFFEL_ACCESS_TOKEN` in Cloudflare. Keep real provider flags disabled and dry-run on.
+
 ```powershell
 npx wrangler secret put ADMIN_TOKEN
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_CHAT_ID
+```
+
+Future provider secrets remain server-side only:
+
+```powershell
 npx wrangler secret put DUFFEL_ACCESS_TOKEN
 npx wrangler secret put AMADEUS_CLIENT_ID
 npx wrangler secret put AMADEUS_CLIENT_SECRET
+npx wrangler secret put SKYSCANNER_API_KEY
 ```
 
 Do not put these values in `wrangler.toml`.
@@ -146,6 +162,8 @@ Local Wrangler cron testing:
 ```powershell
 Invoke-RestMethod "http://localhost:8787/cdn-cgi/handler/scheduled?format=json"
 ```
+
+See `docs/deployment_smoke_checklist.md` for the post-deploy smoke checklist.
 
 ## Duffel Sandbox Smoke
 

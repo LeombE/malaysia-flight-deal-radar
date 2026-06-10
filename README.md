@@ -157,12 +157,14 @@ Never commit `.dev.vars` or real secrets.
 `npm run dev` uses the in-memory/JSON demo path. For Cloudflare Worker and D1 setup, copy the example Wrangler config, create D1, apply migrations, and verify the tables:
 
 ```powershell
+npm run cf:check
 Copy-Item "wrangler.toml.example" "wrangler.toml"
+npm run cf:d1:create:note
 npx wrangler d1 create malaysia-flight-deal-radar
-npx wrangler d1 migrations apply malaysia-flight-deal-radar --local
-npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote
+npm run cf:d1:migrate:local
+npm run cf:d1:migrate:remote
 npx wrangler d1 execute malaysia-flight-deal-radar --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-npx wrangler dev
+npm run cf:dev
 ```
 
 Update your uncommitted `wrangler.toml` with the database IDs returned by Wrangler. The D1 binding is `DB`, and migrations include the airport/route seed data.
@@ -182,8 +184,8 @@ Optional deployment smoke:
 
 ```powershell
 npm run check
-npx wrangler deploy --dry-run
-npx wrangler deploy
+npm run cf:deploy:dry
+npm run cf:deploy
 $base = "https://<your-worker>.<your-subdomain>.workers.dev"
 Invoke-RestMethod "$base/health"
 Invoke-RestMethod "$base/api/provider-health"
@@ -195,20 +197,20 @@ Start-Process "$base/dashboard"
 
 Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real secrets.
 
-For Cloudflare deployments, do not put secrets in `wrangler.toml`. Set them with:
+For Cloudflare deployments, do not put secrets in `wrangler.toml`. For the first mock/demo deployment, do not set `DUFFEL_ACCESS_TOKEN` in Cloudflare yet. Set only the secrets you are ready to use:
 
 ```powershell
 npx wrangler secret put ADMIN_TOKEN
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_CHAT_ID
+```
+
+Future provider secrets remain server-side only:
+
+```powershell
 npx wrangler secret put DUFFEL_ACCESS_TOKEN
 npx wrangler secret put AMADEUS_CLIENT_ID
 npx wrangler secret put AMADEUS_CLIENT_SECRET
-```
-
-Future provider key:
-
-```powershell
 npx wrangler secret put SKYSCANNER_API_KEY
 ```
 
@@ -283,6 +285,7 @@ More detail:
 
 - `docs/local_demo.md`
 - `docs/cloudflare_deployment.md`
+- `docs/deployment_smoke_checklist.md`
 - `docs/deployment_readiness.md`
 - `docs/provider_readiness.md`
 - `docs/provider_selection.md`

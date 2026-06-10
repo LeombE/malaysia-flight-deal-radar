@@ -9,6 +9,13 @@
     "demo:scan": "node scripts/demo-scan.mjs",
     "provider:check": "node scripts/provider-check.mjs",
     "duffel:smoke": "node scripts/duffel-smoke.mjs",
+    "cf:check": "node scripts/cf-check.mjs",
+    "cf:dev": "npx wrangler dev",
+    "cf:d1:create:note": "node scripts/cf-d1-create-note.mjs",
+    "cf:d1:migrate:local": "npx wrangler d1 migrations apply malaysia-flight-deal-radar --local",
+    "cf:d1:migrate:remote": "npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote",
+    "cf:deploy:dry": "npx wrangler deploy --dry-run",
+    "cf:deploy": "npx wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.ts",
     "check": "npm run typecheck --if-present && npm test --if-present"
