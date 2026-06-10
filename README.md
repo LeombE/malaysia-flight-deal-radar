@@ -10,6 +10,8 @@ This repository currently contains the provider scaffold and an optional Amadeus
 - Airport seed data lives in `src/seeds/airports.ts` and `migrations/0002_seed_airports.sql`.
 - Deal scoring lives in `src/scoring/`.
 - Duplicate alert prevention lives in `src/alerts/duplicate-alerts.ts`.
+- Scheduled scan planning/execution lives in `src/scanner/`.
+- D1 scan persistence helpers live in `src/db/d1-scan-repository.ts`.
 
 All persisted MYR prices use integer minor units:
 
@@ -18,6 +20,21 @@ All persisted MYR prices use integer minor units:
 - `historical_p10_minor_myr`
 
 The scoring engine uses median and p10 baselines instead of average prices because flight fares often contain outliers. A stale provider fare is never treated as a live fare; it must be revalidated before alerting or display. A suspected deal is also not a confirmed airline promotion unless a provider explicitly returns promotion or campaign metadata.
+
+## Scheduler
+
+Phase 3 adds a cron-ready scan runner. It scans in bounded batches rather than brute-forcing every route so the app can respect partner API budgets, rate limits, and Cloudflare Worker execution limits.
+
+Route priority is deterministic:
+
+1. active watchlist routes
+2. routes with previous `strong_deal` or `suspected_deal`
+3. popular seed routes
+4. exploration routes ordered by oldest scan time
+
+The scheduler writes search jobs, fare checks, normalized fare snapshots, and deal scores. It attempts provider revalidation before any offer can become alert/display eligible. Telegram sending is intentionally left for Phase 4.
+
+Amadeus remains optional/fallback only. Phase 3 does not add or expand real provider adapters; the scheduler works through the provider registry and skips disabled providers safely.
 
 ## Local Runtime
 

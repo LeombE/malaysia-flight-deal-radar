@@ -11,6 +11,8 @@
 - Always revalidate a fare before alerting or displaying provider-derived live fare content.
 - Suspected deals are statistical signals only. Do not call them confirmed airline promotions unless the provider explicitly returns promotion or campaign data.
 - Historical snapshots are baseline inputs, not live fares. Dashboard and alert copy must make freshness visible.
+- Batch scanning must respect provider daily budgets, concurrency limits, retry guidance, and disabled-provider states.
+- Phase 3 scheduler tests use MockProvider only. Optional real providers, including Amadeus, must be skipped when credentials are absent and must not be expanded during scheduler work.
 
 ## Amadeus
 
