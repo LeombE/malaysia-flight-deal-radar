@@ -36,6 +36,12 @@ If any check fails, scheduler and admin scans skip the provider safely. Dry-run 
 Use:
 
 ```powershell
+npm run provider:check
+```
+
+or, after starting the local server:
+
+```powershell
 Invoke-RestMethod "http://localhost:8787/api/provider-health"
 ```
 
@@ -72,6 +78,20 @@ Common reasons include:
 - `revalidation_not_available`
 
 Duffel uses `unsupported_currency` and `revalidation_not_available` when those provider-specific checks fail. A token beginning with `duffel_test_` reports `test_mode=true` without exposing the token.
+
+## Duffel Smoke Gates
+
+`npm run duffel:smoke` is stricter than ordinary readiness because it can make one Duffel sandbox search. It refuses unless:
+
+- real providers are enabled
+- dry-run is off
+- Duffel is the selected provider
+- a Duffel test token is configured
+- max real searches per run is exactly `1`
+- max real-provider daily budget is between `1` and `3`
+- the route uses valid future dates
+
+When blocked, it prints reason codes and makes no Duffel network call.
 
 ## Stale Fare Safety
 

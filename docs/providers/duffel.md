@@ -32,7 +32,7 @@ DUFFEL_ACCESS_TOKEN=duffel_test_placeholder
 
 Tokens beginning with `duffel_test_` are reported as `test_mode=true` in provider readiness output. The token value itself is never returned by `/api/provider-health` and must not be logged.
 
-Create or obtain a test token from the Duffel dashboard according to your account access. Keep `REAL_PROVIDER_DRY_RUN=true` until you are intentionally ready to test live HTTP calls against Duffel.
+Create or obtain a test token from the Duffel dashboard according to your account access. Keep `REAL_PROVIDER_DRY_RUN=true` until you are intentionally ready to test one live sandbox HTTP flow against Duffel.
 
 ## Request Scope
 
@@ -81,10 +81,52 @@ npm run typecheck --if-present
 npm test --if-present
 ```
 
-Check readiness locally after starting the server:
+Check provider readiness without network calls:
 
 ```powershell
-Invoke-RestMethod "http://localhost:8787/api/provider-health"
+npm run provider:check
 ```
 
 Duffel should appear with safe booleans and blocker reason codes unless you intentionally enable all real-provider guardrails.
+
+## Optional Sandbox Smoke
+
+The smoke script is optional and quota-limited. It refuses to call Duffel unless every safety gate passes:
+
+- `ENABLE_REAL_PROVIDERS=true`
+- `REAL_PROVIDER_DRY_RUN=false`
+- `DEFAULT_REAL_PROVIDER=duffel`
+- `DUFFEL_ACCESS_TOKEN` is present
+- `DUFFEL_ACCESS_TOKEN` starts with `duffel_test_`
+- `MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1`
+- `MAX_REAL_PROVIDER_DAILY_BUDGET` is between `1` and `3`
+- route dates are valid future dates
+
+Prepare `.dev.vars` locally only:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+(Get-Content ".dev.vars") -replace '^DUFFEL_ACCESS_TOKEN=.*', 'DUFFEL_ACCESS_TOKEN=duffel_test_your_local_token' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^ENABLE_REAL_PROVIDERS=.*', 'ENABLE_REAL_PROVIDERS=true' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^REAL_PROVIDER_DRY_RUN=.*', 'REAL_PROVIDER_DRY_RUN=false' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^DEFAULT_REAL_PROVIDER=.*', 'DEFAULT_REAL_PROVIDER=duffel' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_SEARCHES_PER_RUN=.*', 'MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_DAILY_BUDGET=.*', 'MAX_REAL_PROVIDER_DAILY_BUDGET=1' | Set-Content ".dev.vars"
+```
+
+Run one controlled sandbox smoke:
+
+```powershell
+npm run provider:check
+npm run duffel:smoke -- --origin KUL --destination SIN --departure-date 2026-09-01 --return-date 2026-09-06
+```
+
+The smoke output is normalized only: provider, route, dates, MYR price if returned, carrier, stops, duration, expiry, revalidation time, and readiness status. It does not print the raw Duffel response, access token, Authorization header, or passenger personal data.
+
+After the smoke test, switch dry-run back on:
+
+```powershell
+(Get-Content ".dev.vars") -replace '^REAL_PROVIDER_DRY_RUN=.*', 'REAL_PROVIDER_DRY_RUN=true' | Set-Content ".dev.vars"
+```
+
+Never commit `.dev.vars` or real tokens.

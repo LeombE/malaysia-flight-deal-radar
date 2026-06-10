@@ -108,6 +108,12 @@ Invoke-RestMethod "http://localhost:8787/health"
 Invoke-RestMethod "http://localhost:8787/api/deals"
 ```
 
+Check provider readiness without making network calls:
+
+```powershell
+npm run provider:check
+```
+
 Expected local URLs:
 
 - dashboard: `http://localhost:8787/dashboard`
@@ -194,6 +200,22 @@ Invoke-RestMethod "http://localhost:8787/api/provider-health"
 ```
 
 Keep `REAL_PROVIDER_DRY_RUN=true` until you intentionally want the Worker to call Duffel. The current adapter searches and retrieves offers only; it does not create orders, book flights, collect passenger identity, process payment, ticket flights, or implement checkout.
+
+For one controlled Duffel sandbox smoke test, use a test token only and tiny quota:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+(Get-Content ".dev.vars") -replace '^DUFFEL_ACCESS_TOKEN=.*', 'DUFFEL_ACCESS_TOKEN=duffel_test_your_local_token' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^ENABLE_REAL_PROVIDERS=.*', 'ENABLE_REAL_PROVIDERS=true' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^REAL_PROVIDER_DRY_RUN=.*', 'REAL_PROVIDER_DRY_RUN=false' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^DEFAULT_REAL_PROVIDER=.*', 'DEFAULT_REAL_PROVIDER=duffel' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_SEARCHES_PER_RUN=.*', 'MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1' | Set-Content ".dev.vars"
+(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_DAILY_BUDGET=.*', 'MAX_REAL_PROVIDER_DAILY_BUDGET=1' | Set-Content ".dev.vars"
+npm run provider:check
+npm run duffel:smoke -- --origin KUL --destination SIN --departure-date 2026-09-01 --return-date 2026-09-06
+```
+
+If any guard is missing, `npm run duffel:smoke` prints blocking reasons and makes no Duffel call. After the smoke test, set `REAL_PROVIDER_DRY_RUN=true` again. Skyscanner remains deferred until partner API access and display/retention rules are confirmed.
 
 More detail:
 

@@ -5,4 +5,7 @@ demo-data/
 .dev.vars
 .env
 *.log
+logs/
+smoke-output/
+duffel-smoke-output.*
 .DS_Store
