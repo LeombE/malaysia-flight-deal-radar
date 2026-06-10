@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { SchedulerConfig } from "../src/config/scheduler.ts";
+import type { PersistedAlertRecord, SentAlertLookupRecord, TelegramSendResult } from "../src/alerts/types.ts";
 import { MockProvider } from "../src/providers/mock-provider.ts";
 import { createProviderRegistry } from "../src/providers/registry.ts";
 import type {
@@ -55,6 +56,8 @@ class MemoryScanRepository implements ScanRepository {
   fareChecks: PersistedFareCheck[] = [];
   fareSnapshots: PersistedFareSnapshot[] = [];
   dealScores: PersistedDealScore[] = [];
+  alerts: PersistedAlertRecord[] = [];
+  previousAlerts: SentAlertLookupRecord[] = [];
   scannedRoutes: Array<{ route: PlannedSearchJob; at: string }> = [];
 
   async listWatchlistRoutes(): Promise<ScanRouteCandidate[]> {
@@ -136,8 +139,30 @@ class MemoryScanRepository implements ScanRepository {
     this.dealScores.push(record);
   }
 
+  async listRecentAlertsForDedupe(): Promise<SentAlertLookupRecord[]> {
+    return this.previousAlerts;
+  }
+
+  async insertAlert(record: PersistedAlertRecord): Promise<void> {
+    this.alerts.push(record);
+  }
+
   async markRouteScanned(route: PlannedSearchJob, at: string): Promise<void> {
     this.scannedRoutes.push({ route, at });
+  }
+}
+
+class RecordingAlertSender {
+  messages: string[] = [];
+  private readonly result: TelegramSendResult;
+
+  constructor(result: TelegramSendResult = { status: "sent", messageId: 1 }) {
+    this.result = result;
+  }
+
+  async sendMessage(message: string): Promise<TelegramSendResult> {
+    this.messages.push(message);
+    return this.result;
   }
 }
 
@@ -151,6 +176,7 @@ class RevalidatingMockProvider extends MockProvider {
     failSearch?: boolean;
     retentionMode?: ProviderRetentionMode;
     staleRevalidation?: boolean;
+    priceMinor?: number;
     delaySearch?: () => Promise<void>;
   };
 
@@ -159,6 +185,7 @@ class RevalidatingMockProvider extends MockProvider {
     failSearch?: boolean;
     retentionMode?: ProviderRetentionMode;
     staleRevalidation?: boolean;
+    priceMinor?: number;
     delaySearch?: () => Promise<void>;
   } = {}) {
     super();
@@ -191,7 +218,7 @@ class RevalidatingMockProvider extends MockProvider {
       const offers = await super.searchRoundTripOffers(input);
       return offers.map((offer) => ({
         ...offer,
-        price: { amountMinor: 70_000, currency: "MYR" },
+        price: { amountMinor: this.options.priceMinor ?? 70_000, currency: "MYR" },
         lastVerifiedAt: NOW.toISOString(),
         retentionMode: this.getRetentionMode(),
         display: {
@@ -213,7 +240,7 @@ class RevalidatingMockProvider extends MockProvider {
     if (!offer) return null;
     return {
       ...offer,
-      price: { amountMinor: 70_000, currency: "MYR" },
+      price: { amountMinor: this.options.priceMinor ?? 70_000, currency: "MYR" },
       lastVerifiedAt: this.options.staleRevalidation ? "2026-06-10T06:00:00.000Z" : NOW.toISOString(),
       retentionMode: this.getRetentionMode(),
       display: {
@@ -354,6 +381,49 @@ test("successful scan persists fare check, fare snapshot, and deal score", async
   assert.equal(repository.dealScores[0]?.alertEligible, true);
 });
 
+test("scheduler sends Telegram alert after scoring an eligible deal", async () => {
+  const repository = new MemoryScanRepository();
+  repository.popularSeedRoutes = [route("KUL", "BKK")];
+  const alertSender = new RecordingAlertSender();
+
+  const result = await runScheduledScan({
+    repository,
+    providers: [new RevalidatingMockProvider()],
+    config: defaultConfig,
+    now: NOW,
+    idFactory: idFactory(),
+    alertSender,
+    alertCooldownHours: 24
+  });
+
+  assert.equal(result.alertsSent, 1);
+  assert.equal(alertSender.messages.length, 1);
+  assert.equal(repository.alerts.length, 1);
+  assert.equal(repository.alerts[0]?.status, "sent");
+  assert.equal(repository.alerts[0]?.amountMinorMyr, 70_000);
+  assert.equal(repository.alerts[0]?.providerName, "mock");
+});
+
+test("scheduler sends Telegram alert for eligible suspected deal", async () => {
+  const repository = new MemoryScanRepository();
+  repository.popularSeedRoutes = [route("KUL", "BKK")];
+  const alertSender = new RecordingAlertSender();
+
+  const result = await runScheduledScan({
+    repository,
+    providers: [new RevalidatingMockProvider({ priceMinor: 80_000 })],
+    config: defaultConfig,
+    now: NOW,
+    idFactory: idFactory(),
+    alertSender,
+    alertCooldownHours: 24
+  });
+
+  assert.equal(result.alertsSent, 1);
+  assert.equal(repository.dealScores[0]?.dealLabel, "suspected_deal");
+  assert.match(alertSender.messages[0] ?? "", /Suspected flight deal found/);
+});
+
 test("failed provider call records failed job status and degraded health after repeated failures", async () => {
   const repository = new MemoryScanRepository();
   repository.providerLimits.set("mock", {
@@ -416,6 +486,61 @@ test("stale revalidation prevents alert/display eligibility", async () => {
   assert.equal(repository.fareChecks[0]?.lastRevalidatedAt, "2026-06-10T06:00:00.000Z");
   assert.equal(repository.dealScores[0]?.dealLabel, "urgent_revalidate");
   assert.equal(repository.dealScores[0]?.alertEligible, false);
+  assert.equal(repository.alerts.length, 0);
+});
+
+test("Telegram send failure does not fail scan and records failed alert", async () => {
+  const repository = new MemoryScanRepository();
+  repository.popularSeedRoutes = [route("KUL", "BKK")];
+  const alertSender = new RecordingAlertSender({
+    status: "failed",
+    errorCode: "telegram_http_500",
+    errorMessage: "Telegram sendMessage failed with HTTP 500"
+  });
+
+  const result = await runScheduledScan({
+    repository,
+    providers: [new RevalidatingMockProvider()],
+    config: defaultConfig,
+    now: NOW,
+    idFactory: idFactory(),
+    alertSender,
+    alertCooldownHours: 24
+  });
+
+  assert.equal(result.jobsSucceeded, 1);
+  assert.equal(result.alertsFailed, 1);
+  assert.equal(repository.alerts[0]?.status, "failed");
+  assert.equal(repository.alerts[0]?.errorCode, "telegram_http_500");
+});
+
+test("scheduler skips duplicate alert within cooldown", async () => {
+  const repository = new MemoryScanRepository();
+  repository.popularSeedRoutes = [route("KUL", "BKK")];
+  repository.previousAlerts = [{
+    originIata: "KUL",
+    destinationIata: "BKK",
+    departureDate: "2026-07-25",
+    returnDate: "2026-07-30",
+    provider: "mock",
+    dealLabel: "strong_deal",
+    sentAt: "2026-06-10T07:00:00.000Z"
+  }];
+  const alertSender = new RecordingAlertSender();
+
+  const result = await runScheduledScan({
+    repository,
+    providers: [new RevalidatingMockProvider()],
+    config: defaultConfig,
+    now: NOW,
+    idFactory: idFactory(),
+    alertSender,
+    alertCooldownHours: 24
+  });
+
+  assert.equal(result.alertsDuplicate, 1);
+  assert.equal(alertSender.messages.length, 0);
+  assert.equal(repository.alerts[0]?.status, "duplicate");
 });
 
 test("Amadeus missing credentials does not break scheduler through provider registry", async () => {

@@ -68,6 +68,7 @@ export interface ProviderOffer {
   carriers: string[];
   durationMinutes: number;
   source?: string;
+  deepLink?: string;
   expiresAt?: string;
   lastVerifiedAt: string;
   retentionMode: ProviderRetentionMode;
@@ -92,4 +93,3 @@ export interface FlightProvider {
   getProviderHealth(): Promise<ProviderHealth>;
   getRetentionMode(): ProviderRetentionMode;
 }
-

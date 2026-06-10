@@ -45,8 +45,8 @@ Raw provider payloads are not persisted by the scheduler. Under `NO_CACHE`, only
 
 `MockProvider` is the default local simulation provider because it is deterministic, requires no credentials, and avoids real network calls in tests. This keeps scheduler behavior testable without depending on partner API availability.
 
-## Revalidation
+## Revalidation And Alerts
 
 Fares can change quickly. A search response alone is not enough for alert or display eligibility. The scheduler attempts provider revalidation for each offer and only lets the scoring result become alert/display eligible when the revalidated offer is fresh, non-expired, and allowed by provider display rules.
 
-Telegram sending is not part of Phase 3.
+Phase 4 evaluates Telegram alert eligibility after scoring. It records sent, duplicate, disabled, and failed alert outcomes. Telegram failure does not fail the scan because fare collection and notification delivery are separate reliability concerns.

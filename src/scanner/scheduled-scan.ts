@@ -1,3 +1,6 @@
+import { evaluateAlertEligibility } from "../alerts/eligibility.ts";
+import { formatTelegramDealMessage, hashAlertMessage } from "../alerts/telegram-format.ts";
+import type { PersistedAlertRecord, TelegramSendResult } from "../alerts/types.ts";
 import type { SchedulerConfig } from "../config/scheduler.ts";
 import type { FlightProvider, ProviderOffer } from "../providers/types.ts";
 import { scoreDeal } from "../scoring/deal-scoring.ts";
@@ -16,10 +19,16 @@ export interface StructuredLogger {
   log(event: string, fields: Record<string, unknown>): void;
 }
 
+export interface AlertSender {
+  sendMessage(text: string): Promise<TelegramSendResult>;
+}
+
 export interface ScheduledScanOptions {
   repository: ScanRepository;
   providers: FlightProvider[];
   config: SchedulerConfig;
+  alertSender?: AlertSender;
+  alertCooldownHours?: number;
   now?: Date;
   idFactory?: () => string;
   logger?: StructuredLogger;
@@ -156,6 +165,55 @@ function dealScoreRecordFromResult(input: {
   };
 }
 
+function minutesBetween(later: Date, earlierIso: string): number {
+  const earlier = Date.parse(earlierIso);
+  if (!Number.isFinite(earlier)) return Number.POSITIVE_INFINITY;
+  return (later.getTime() - earlier) / 60_000;
+}
+
+function cooldownUntil(now: Date, cooldownHours: number): string {
+  return new Date(now.getTime() + cooldownHours * 60 * 60_000).toISOString();
+}
+
+function alertRecordFromSend(input: {
+  id: string;
+  dealScoreId: string;
+  dedupeKey: string;
+  offer: ProviderOffer;
+  score: ReturnType<typeof scoreDeal>;
+  status: PersistedAlertRecord["status"];
+  sentAt: string;
+  cooldownUntil: string;
+  errorCode?: string;
+  errorMessage?: string;
+  messageHash: string;
+}): PersistedAlertRecord {
+  const record: PersistedAlertRecord = {
+    id: input.id,
+    dealScoreId: input.dealScoreId,
+    dedupeKey: input.dedupeKey,
+    alertType: "telegram_deal",
+    originIata: input.offer.originIata,
+    destinationIata: input.offer.destinationIata,
+    departureDate: input.offer.departureDate,
+    returnDate: input.offer.returnDate,
+    provider: input.offer.provider,
+    providerName: input.offer.provider,
+    dealLabel: input.score.deal_label,
+    dealScore: input.score.score,
+    amountMinorMyr: input.score.amount_minor_myr,
+    baselineMedianMinorMyr: input.score.baseline_median_minor_myr,
+    discountPct: input.score.discount_pct,
+    status: input.status,
+    sentAt: input.sentAt,
+    cooldownUntil: input.cooldownUntil,
+    messageHash: input.messageHash
+  };
+  if (input.errorCode) record.errorCode = input.errorCode;
+  if (input.errorMessage) record.errorMessage = input.errorMessage;
+  return record;
+}
+
 export async function runScheduledScan(options: ScheduledScanOptions): Promise<ScanRunResult> {
   const now = options.now ?? new Date();
   const nowIso = now.toISOString();
@@ -173,6 +231,11 @@ export async function runScheduledScan(options: ScheduledScanOptions): Promise<S
     fareChecksInserted: 0,
     fareSnapshotsInserted: 0,
     dealScoresInserted: 0,
+    alertsSent: 0,
+    alertsSkipped: 0,
+    alertsDisabled: 0,
+    alertsFailed: 0,
+    alertsDuplicate: 0,
     revalidationsAttempted: 0,
     providerBudgetUsed: 0
   };
@@ -291,13 +354,100 @@ export async function runScheduledScan(options: ScheduledScanOptions): Promise<S
             now
           });
 
+          const dealScoreId = idFactory();
           await options.repository.insertDealScore(dealScoreRecordFromResult({
-            id: idFactory(),
+            id: dealScoreId,
             fareCheckId,
             scoredAt: nowIso,
             result: score
           }));
           result.dealScoresInserted += 1;
+
+          const cooldownHours = options.alertCooldownHours ?? 24;
+          const previousAlerts = await options.repository.listRecentAlertsForDedupe({
+            originIata: normalizedOffer.originIata,
+            destinationIata: normalizedOffer.destinationIata,
+            departureDate: normalizedOffer.departureDate,
+            returnDate: normalizedOffer.returnDate,
+            provider: normalizedOffer.provider,
+            dealLabel: score.deal_label
+          });
+          const eligibility = evaluateAlertEligibility({
+            offer: normalizedOffer,
+            score,
+            now,
+            recentlyRevalidated:
+              isRevalidated &&
+              minutesBetween(now, normalizedOffer.lastVerifiedAt) <= options.config.revalidateBeforeAlertMinutes,
+            revalidateBeforeAlertMinutes: options.config.revalidateBeforeAlertMinutes,
+            cooldownHours,
+            previousAlerts
+          });
+
+          if (eligibility.status === "duplicate") {
+            const message = formatTelegramDealMessage({
+              offer: normalizedOffer,
+              score,
+              stayLengthDays: job.stayLengthDays
+            });
+            await options.repository.insertAlert(alertRecordFromSend({
+              id: idFactory(),
+              dealScoreId,
+              dedupeKey: eligibility.dedupeKey,
+              offer: normalizedOffer,
+              score,
+              status: "duplicate",
+              sentAt: nowIso,
+              cooldownUntil: eligibility.cooldownUntil ?? cooldownUntil(now, cooldownHours),
+              errorCode: "duplicate_within_cooldown",
+              errorMessage: "Duplicate alert skipped within cooldown",
+              messageHash: hashAlertMessage(message)
+            }));
+            result.alertsDuplicate += 1;
+          } else if (eligibility.eligible) {
+            const message = formatTelegramDealMessage({
+              offer: normalizedOffer,
+              score,
+              stayLengthDays: job.stayLengthDays
+            });
+            const sendResult = options.alertSender
+              ? await options.alertSender.sendMessage(message)
+              : { status: "disabled", errorCode: "telegram_sender_missing", errorMessage: "Telegram sender is not configured" } as const;
+
+            const alertInput: {
+              id: string;
+              dealScoreId: string;
+              dedupeKey: string;
+              offer: ProviderOffer;
+              score: ReturnType<typeof scoreDeal>;
+              status: PersistedAlertRecord["status"];
+              sentAt: string;
+              cooldownUntil: string;
+              errorCode?: string;
+              errorMessage?: string;
+              messageHash: string;
+            } = {
+              id: idFactory(),
+              dealScoreId,
+              dedupeKey: eligibility.dedupeKey,
+              offer: normalizedOffer,
+              score,
+              status: sendResult.status,
+              sentAt: nowIso,
+              cooldownUntil: cooldownUntil(now, cooldownHours),
+              messageHash: hashAlertMessage(message)
+            };
+            if (sendResult.errorCode) alertInput.errorCode = sendResult.errorCode;
+            if (sendResult.errorMessage) alertInput.errorMessage = sendResult.errorMessage;
+            await options.repository.insertAlert(alertRecordFromSend(alertInput));
+
+            if (sendResult.status === "sent") result.alertsSent += 1;
+            else if (sendResult.status === "disabled") result.alertsDisabled += 1;
+            else if (sendResult.status === "failed") result.alertsFailed += 1;
+            else result.alertsSkipped += 1;
+          } else {
+            result.alertsSkipped += 1;
+          }
         }
 
         await options.repository.updateSearchJob(job.id, {

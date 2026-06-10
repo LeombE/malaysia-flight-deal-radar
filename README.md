@@ -12,6 +12,7 @@ This repository currently contains the provider scaffold and an optional Amadeus
 - Duplicate alert prevention lives in `src/alerts/duplicate-alerts.ts`.
 - Scheduled scan planning/execution lives in `src/scanner/`.
 - D1 scan persistence helpers live in `src/db/d1-scan-repository.ts`.
+- Telegram alert eligibility, formatting, and sending live in `src/alerts/`.
 
 All persisted MYR prices use integer minor units:
 
@@ -32,9 +33,15 @@ Route priority is deterministic:
 3. popular seed routes
 4. exploration routes ordered by oldest scan time
 
-The scheduler writes search jobs, fare checks, normalized fare snapshots, and deal scores. It attempts provider revalidation before any offer can become alert/display eligible. Telegram sending is intentionally left for Phase 4.
+The scheduler writes search jobs, fare checks, normalized fare snapshots, and deal scores. It attempts provider revalidation before any offer can become alert/display eligible. Phase 4 adds Telegram alert evaluation after scoring; Telegram failures are recorded but do not fail the scan.
 
 Amadeus remains optional/fallback only. Phase 3 does not add or expand real provider adapters; the scheduler works through the provider registry and skips disabled providers safely.
+
+## Telegram Alerts
+
+Telegram is disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Alerts are only sent for fresh, revalidated `suspected_deal` or `strong_deal` results with score `>= 70`, and duplicate alerts are blocked during `ALERT_COOLDOWN_HOURS`.
+
+See `docs/telegram_alerts.md` for setup and safety notes.
 
 ## Local Runtime
 

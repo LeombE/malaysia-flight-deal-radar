@@ -1,4 +1,5 @@
 import type { ProviderRetentionMode } from "../providers/types.ts";
+import type { PersistedAlertRecord, SentAlertLookupRecord } from "../alerts/types.ts";
 import type { DealLabel, HistoricalFareSample } from "../scoring/types.ts";
 
 export type RoutePrioritySource = "watchlist" | "previous_deal" | "popular_seed" | "exploration";
@@ -124,6 +125,15 @@ export interface ScanRepository {
   insertFareCheck(record: PersistedFareCheck): Promise<void>;
   insertFareSnapshot(record: PersistedFareSnapshot): Promise<void>;
   insertDealScore(record: PersistedDealScore): Promise<void>;
+  listRecentAlertsForDedupe(input: {
+    originIata: string;
+    destinationIata: string;
+    departureDate: string;
+    returnDate: string;
+    provider: string;
+    dealLabel: DealLabel;
+  }): Promise<SentAlertLookupRecord[]>;
+  insertAlert(record: PersistedAlertRecord): Promise<void>;
   markRouteScanned(route: PlannedSearchJob, at: string): Promise<void>;
 }
 
@@ -137,6 +147,11 @@ export interface ScanRunResult {
   fareChecksInserted: number;
   fareSnapshotsInserted: number;
   dealScoresInserted: number;
+  alertsSent: number;
+  alertsSkipped: number;
+  alertsDisabled: number;
+  alertsFailed: number;
+  alertsDuplicate: number;
   revalidationsAttempted: number;
   providerBudgetUsed: number;
 }

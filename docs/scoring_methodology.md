@@ -37,4 +37,4 @@ The score is reduced for itineraries that are less useful to travelers:
 
 Alerts require score `>= 70`, a non-expired offer, and recent revalidation.
 
-The scheduler always attempts revalidation before storing an offer as alert/display eligible. Telegram delivery is a later phase, so Phase 3 records eligibility but does not send alerts.
+The scheduler always attempts revalidation before storing an offer as alert/display eligible. Telegram alerts can only be triggered for fresh `suspected_deal` or `strong_deal` scores at or above 70.

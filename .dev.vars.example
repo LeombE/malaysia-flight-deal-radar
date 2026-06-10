@@ -21,3 +21,12 @@ PROVIDER_FAILURE_DEGRADE_THRESHOLD=3
 
 # Admin scan trigger. Leave blank to disable POST /api/admin/scan.
 ADMIN_TOKEN=
+
+# Phase 4 Telegram alerts. Leave token/chat blank to disable sending safely.
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+TELEGRAM_DRY_RUN=true
+TELEGRAM_TIMEOUT_MS=5000
+TELEGRAM_MAX_RETRY_ATTEMPTS=3
+TELEGRAM_RETRY_BASE_DELAY_MS=250
+ALERT_COOLDOWN_HOURS=24

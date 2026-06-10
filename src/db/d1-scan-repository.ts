@@ -1,4 +1,5 @@
 import type { HistoricalFareSample } from "../scoring/types.ts";
+import type { PersistedAlertRecord, SentAlertLookupRecord } from "../alerts/types.ts";
 import type {
   PersistedDealScore,
   PersistedFareCheck,
@@ -329,6 +330,88 @@ export class D1ScanRepository implements ScanRepository {
       record.alertEligible ? 1 : 0,
       JSON.stringify(record.reasons),
       record.scoredAt
+    ).run();
+  }
+
+  async listRecentAlertsForDedupe(input: {
+    originIata: string;
+    destinationIata: string;
+    departureDate: string;
+    returnDate: string;
+    provider: string;
+    dealLabel: SentAlertLookupRecord["dealLabel"];
+  }): Promise<SentAlertLookupRecord[]> {
+    const result = await this.db.prepare(`
+      SELECT origin_iata, destination_iata, departure_date, return_date, provider, deal_label, sent_at
+      FROM alerts
+      WHERE origin_iata = ?
+        AND destination_iata = ?
+        AND departure_date = ?
+        AND return_date = ?
+        AND provider = ?
+        AND deal_label = ?
+        AND status = 'sent'
+      ORDER BY sent_at DESC
+      LIMIT 10
+    `).bind(
+      input.originIata,
+      input.destinationIata,
+      input.departureDate,
+      input.returnDate,
+      input.provider,
+      input.dealLabel
+    ).all<{
+      origin_iata: string;
+      destination_iata: string;
+      departure_date: string;
+      return_date: string;
+      provider: string;
+      deal_label: SentAlertLookupRecord["dealLabel"];
+      sent_at: string;
+    }>();
+
+    return (result.results ?? []).map((row) => ({
+      originIata: row.origin_iata,
+      destinationIata: row.destination_iata,
+      departureDate: row.departure_date,
+      returnDate: row.return_date,
+      provider: row.provider,
+      dealLabel: row.deal_label,
+      sentAt: row.sent_at
+    }));
+  }
+
+  async insertAlert(record: PersistedAlertRecord): Promise<void> {
+    await this.db.prepare(`
+      INSERT INTO alerts (
+        id, deal_score_id, dedupe_key, alert_type, origin_iata,
+        destination_iata, departure_date, return_date, provider,
+        provider_name, deal_label, deal_score, amount_minor_myr,
+        baseline_median_minor_myr, discount_pct, status, sent_at,
+        cooldown_until, error_code, error_message, message_hash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      record.id,
+      record.dealScoreId,
+      record.dedupeKey,
+      record.alertType,
+      record.originIata,
+      record.destinationIata,
+      record.departureDate,
+      record.returnDate,
+      record.provider,
+      record.providerName,
+      record.dealLabel,
+      record.dealScore,
+      record.amountMinorMyr,
+      record.baselineMedianMinorMyr,
+      record.discountPct,
+      record.status,
+      record.sentAt,
+      record.cooldownUntil,
+      record.errorCode ?? null,
+      record.errorMessage ?? null,
+      record.messageHash
     ).run();
   }
 
