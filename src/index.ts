@@ -1,6 +1,8 @@
+import { parseRealProviderConfig } from "./config/real-providers.ts";
 import { parseSchedulerConfig } from "./config/scheduler.ts";
 import { D1ScanRepository } from "./db/d1-scan-repository.ts";
 import { createProviderRegistry } from "./providers/registry.ts";
+import { buildProviderReadinessReports } from "./providers/readiness.ts";
 import { runScheduledScan } from "./scanner/scheduled-scan.ts";
 import {
   createDefaultAppDependencies,
@@ -30,10 +32,18 @@ export default {
       throw new Error("D1 DB binding is required");
     }
     const envVars = stringEnv(env);
+    const providers = createProviderRegistry(envVars);
+    const realProviderConfig = parseRealProviderConfig(envVars);
     ctx.waitUntil(runScheduledScan({
       repository: new D1ScanRepository(env.DB),
-      providers: createProviderRegistry(envVars),
-      config: parseSchedulerConfig(envVars)
+      providers,
+      config: parseSchedulerConfig(envVars),
+      realProviderConfig,
+      providerReadiness: buildProviderReadinessReports({
+        providers,
+        env: envVars,
+        config: realProviderConfig
+      })
     }));
   }
 };

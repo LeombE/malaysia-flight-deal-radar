@@ -165,7 +165,26 @@ Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real
 
 Amadeus is optional and disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present.
 
+Real providers are also blocked by Phase 6A guardrails unless all of these are true:
+
+- `ENABLE_REAL_PROVIDERS=true`
+- `REAL_PROVIDER_DRY_RUN=false`
+- `DEFAULT_REAL_PROVIDER` names the provider
+- required provider credentials are configured
+- provider budget remains available
+- retention, currency, and revalidation checks pass
+
+Check safe readiness output with:
+
+```powershell
+Invoke-RestMethod "http://localhost:8787/api/provider-health"
+```
+
+MockProvider remains the default local/demo provider. Readiness output shows booleans and reason codes only; it must not expose secrets.
+
 More detail:
 
 - `docs/local_demo.md`
 - `docs/deployment_readiness.md`
+- `docs/provider_readiness.md`
+- `docs/provider_selection.md`

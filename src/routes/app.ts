@@ -1,7 +1,13 @@
+import { parseRealProviderConfig, type RealProviderConfig } from "../config/real-providers.ts";
 import { parseSchedulerConfig } from "../config/scheduler.ts";
 import { D1ApiRepository } from "../db/d1-api-repository.ts";
 import { D1ScanRepository, type D1DatabaseLike } from "../db/d1-scan-repository.ts";
 import { createProviderRegistry } from "../providers/registry.ts";
+import {
+  buildProviderReadinessReports,
+  type ProviderReadinessLimit,
+  type ProviderReadinessReport
+} from "../providers/readiness.ts";
 import type { FlightProvider, ProviderHealth } from "../providers/types.ts";
 import type { SchedulerConfig } from "../config/scheduler.ts";
 import type { ScanRepository, ScanRunResult } from "../scanner/types.ts";
@@ -27,6 +33,9 @@ export interface AppDependencies {
   scanRepository?: ScanRepository;
   providers: FlightProvider[];
   schedulerConfig: SchedulerConfig;
+  realProviderConfig?: RealProviderConfig;
+  providerReadinessEnv?: Record<string, string | undefined>;
+  providerReadiness?: ProviderReadinessReport[];
   runScan?: () => Promise<ScanRunResult>;
   now?: () => Date;
 }
@@ -172,10 +181,28 @@ function adminTokenStatus(request: Request, env: FlightRadarEnv): Response | nul
 
 async function providerHealthRecords(
   repository: ApiRepository,
-  providers: FlightProvider[]
+  providers: FlightProvider[],
+  options: {
+    env?: Record<string, string | undefined>;
+    realProviderConfig?: RealProviderConfig;
+  } = {}
 ): Promise<ProviderHealthApiRecord[]> {
   const limits = await repository.listProviderLimits();
   const limitsByProvider = new Map(limits.map((limit) => [limit.provider_name, limit]));
+  const readinessLimits: ProviderReadinessLimit[] = limits.map((limit) => ({
+    providerName: limit.provider_name,
+    dailyBudget: limit.daily_budget,
+    usedToday: limit.used_today
+  }));
+  const readinessReports = options.env && options.realProviderConfig
+    ? buildProviderReadinessReports({
+        providers,
+        env: options.env,
+        config: options.realProviderConfig,
+        providerLimits: readinessLimits
+      })
+    : [];
+  const readinessByName = new Map(readinessReports.map((report) => [report.provider_name, report]));
   const seen = new Set<string>();
   const records: ProviderHealthApiRecord[] = [];
 
@@ -199,14 +226,17 @@ async function providerHealthRecords(
       failure_count: 0
     };
     const merged = limit ?? fallback;
-    records.push({
+    const record: ProviderHealthApiRecord = {
       ...merged,
       enabled: provider.isEnabled(),
       status: health.status,
       checked_at: health.checkedAt,
       message: health.message ?? null,
       retry_after_ms: health.retryAfterMs ?? null
-    });
+    };
+    const readiness = readinessByName.get(provider.name);
+    if (readiness) record.readiness = readiness;
+    records.push(record);
     seen.add(provider.name);
   }
 
@@ -230,11 +260,21 @@ export function createDefaultAppDependencies(env: FlightRadarEnv): AppDependenci
     throw new Error("D1 DB binding is required");
   }
   const envVars = stringEnv(env);
+  const providers = createProviderRegistry(envVars);
+  const realProviderConfig = parseRealProviderConfig(envVars);
+  const providerReadiness = buildProviderReadinessReports({
+    providers,
+    env: envVars,
+    config: realProviderConfig
+  });
   return {
     apiRepository: new D1ApiRepository(env.DB),
     scanRepository: new D1ScanRepository(env.DB),
-    providers: createProviderRegistry(envVars),
-    schedulerConfig: parseSchedulerConfig(envVars)
+    providers,
+    schedulerConfig: parseSchedulerConfig(envVars),
+    realProviderConfig,
+    providerReadinessEnv: envVars,
+    providerReadiness
   };
 }
 
@@ -248,7 +288,10 @@ export async function handleAppRequest(
 
   if (url.pathname === "/health") {
     if (request.method !== "GET") return methodNotAllowed();
-    const providers = await providerHealthRecords(dependencies.apiRepository, dependencies.providers);
+    const healthOptions: { env?: Record<string, string | undefined>; realProviderConfig?: RealProviderConfig } = {};
+    if (dependencies.providerReadinessEnv) healthOptions.env = dependencies.providerReadinessEnv;
+    if (dependencies.realProviderConfig) healthOptions.realProviderConfig = dependencies.realProviderConfig;
+    const providers = await providerHealthRecords(dependencies.apiRepository, dependencies.providers, healthOptions);
     return jsonResponse({
       ok: true,
       status: "ok",
@@ -313,9 +356,12 @@ export async function handleAppRequest(
 
   if (url.pathname === "/api/provider-health") {
     if (request.method !== "GET") return methodNotAllowed();
+    const healthOptions: { env?: Record<string, string | undefined>; realProviderConfig?: RealProviderConfig } = {};
+    if (dependencies.providerReadinessEnv) healthOptions.env = dependencies.providerReadinessEnv;
+    if (dependencies.realProviderConfig) healthOptions.realProviderConfig = dependencies.realProviderConfig;
     return jsonResponse({
       ok: true,
-      providers: await providerHealthRecords(dependencies.apiRepository, dependencies.providers)
+      providers: await providerHealthRecords(dependencies.apiRepository, dependencies.providers, healthOptions)
     });
   }
 
@@ -326,6 +372,8 @@ export async function handleAppRequest(
       config: dependencies.schedulerConfig
     };
     if (dependencies.scanRepository) adminDependencies.repository = dependencies.scanRepository;
+    if (dependencies.providerReadiness) adminDependencies.providerReadiness = dependencies.providerReadiness;
+    if (dependencies.realProviderConfig) adminDependencies.realProviderConfig = dependencies.realProviderConfig;
     if (dependencies.runScan) adminDependencies.runScan = dependencies.runScan;
     return handleAdminScanRequest(request, env, adminDependencies);
   }

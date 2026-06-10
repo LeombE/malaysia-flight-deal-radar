@@ -1,4 +1,6 @@
 import type { SchedulerConfig } from "../config/scheduler.ts";
+import type { RealProviderConfig } from "../config/real-providers.ts";
+import type { ProviderReadinessReport } from "../providers/readiness.ts";
 import type { FlightProvider } from "../providers/types.ts";
 import { runScheduledScan } from "../scanner/scheduled-scan.ts";
 import type { ScanRepository, ScanRunResult } from "../scanner/types.ts";
@@ -11,6 +13,8 @@ export interface AdminScanDependencies {
   repository?: ScanRepository;
   providers?: FlightProvider[];
   config?: SchedulerConfig;
+  providerReadiness?: ProviderReadinessReport[];
+  realProviderConfig?: RealProviderConfig;
   runScan?: () => Promise<ScanRunResult>;
 }
 
@@ -40,11 +44,16 @@ export async function handleAdminScanRequest(
   const result = dependencies.runScan
     ? await dependencies.runScan()
     : dependencies.repository && dependencies.providers && dependencies.config
-      ? await runScheduledScan({
-          repository: dependencies.repository,
-          providers: dependencies.providers,
-          config: dependencies.config
-        })
+      ? await runScheduledScan((() => {
+          const scanOptions: Parameters<typeof runScheduledScan>[0] = {
+            repository: dependencies.repository,
+            providers: dependencies.providers,
+            config: dependencies.config
+          };
+          if (dependencies.providerReadiness) scanOptions.providerReadiness = dependencies.providerReadiness;
+          if (dependencies.realProviderConfig) scanOptions.realProviderConfig = dependencies.realProviderConfig;
+          return scanOptions;
+        })())
       : null;
 
   if (!result) {

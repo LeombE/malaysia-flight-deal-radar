@@ -1,4 +1,6 @@
+import { parseRealProviderConfig } from "../config/real-providers.ts";
 import { createProviderRegistry } from "../providers/registry.ts";
+import { buildProviderReadinessReports } from "../providers/readiness.ts";
 import { handleAppRequest, type AppDependencies, type FlightRadarEnv } from "../routes/app.ts";
 import type { ScanRunResult } from "../scanner/types.ts";
 import { DemoRepository } from "./demo-repository.ts";
@@ -28,19 +30,28 @@ function envStrings(env: FlightRadarEnv): Record<string, string | undefined> {
 export function createDemoApp(options: DemoAppOptions = {}): DemoApp {
   const state = options.state ?? createSeededDemoState();
   const env = options.env ?? {};
+  const envVars = envStrings(env);
   const repository = new DemoRepository(state);
-  const providers = createProviderRegistry(envStrings(env), {
+  const providers = createProviderRegistry(envVars, {
     fetch: async () => {
       throw new Error("Demo app must not make real provider network calls");
     },
     now: () => Date.parse(state.clock.nowIso),
     sleep: async () => {}
   });
+  const realProviderConfig = parseRealProviderConfig(envVars);
   const dependencies: AppDependencies = {
     apiRepository: repository,
     scanRepository: repository,
     providers,
     schedulerConfig: demoSchedulerConfig,
+    realProviderConfig,
+    providerReadinessEnv: envVars,
+    providerReadiness: buildProviderReadinessReports({
+      providers,
+      env: envVars,
+      config: realProviderConfig
+    }),
     now: () => new Date(state.clock.nowIso),
     runScan: async () => {
       const result = await runDemoScan(state);

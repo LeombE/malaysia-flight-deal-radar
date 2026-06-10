@@ -1,7 +1,9 @@
 import { evaluateAlertEligibility } from "../alerts/eligibility.ts";
 import { formatTelegramDealMessage, hashAlertMessage } from "../alerts/telegram-format.ts";
 import type { PersistedAlertRecord, TelegramSendResult } from "../alerts/types.ts";
+import type { RealProviderConfig } from "../config/real-providers.ts";
 import type { SchedulerConfig } from "../config/scheduler.ts";
+import { readinessByProviderName, type ProviderReadinessReport } from "../providers/readiness.ts";
 import type { FlightProvider, ProviderOffer } from "../providers/types.ts";
 import { scoreDeal } from "../scoring/deal-scoring.ts";
 import { planSearchJobs, prioritizeRoutes } from "./route-priority.ts";
@@ -29,6 +31,8 @@ export interface ScheduledScanOptions {
   config: SchedulerConfig;
   alertSender?: AlertSender;
   alertCooldownHours?: number;
+  providerReadiness?: ProviderReadinessReport[];
+  realProviderConfig?: RealProviderConfig;
   now?: Date;
   idFactory?: () => string;
   logger?: StructuredLogger;
@@ -221,6 +225,7 @@ export async function runScheduledScan(options: ScheduledScanOptions): Promise<S
   const runId = idFactory();
   const providersByName = providerMap(options.providers);
   const providerNames = options.providers.map((provider) => provider.name);
+  const readinessByName = readinessByProviderName(options.providerReadiness);
   const result: ScanRunResult = {
     runId,
     jobsCreated: 0,
@@ -258,15 +263,26 @@ export async function runScheduledScan(options: ScheduledScanOptions): Promise<S
   });
 
   const jobLimitByProvider = new Map<string, number>();
+  const realJobLimitByProvider = new Map<string, number>();
   const providerLimitByName = new Map<string, ProviderLimitState>();
   const acceptedJobs: PlannedSearchJob[] = [];
 
   for (const job of jobs) {
     const providerLimit = await options.repository.getProviderLimit(job.providerName) ?? defaultLimit(job.providerName, options.config);
     providerLimitByName.set(job.providerName, providerLimit);
-    const remainingBudget = Math.max(0, Math.min(providerLimit.dailyBudget, options.config.providerDailyBudget) - providerLimit.usedToday);
+    const readiness = readinessByName.get(job.providerName);
+    const isRealProvider = readiness ? !readiness.is_mock_provider : job.providerName !== "mock";
+    const providerBudgetCap = isRealProvider && options.realProviderConfig
+      ? Math.min(providerLimit.dailyBudget, options.config.providerDailyBudget, options.realProviderConfig.maxRealProviderDailyBudget)
+      : Math.min(providerLimit.dailyBudget, options.config.providerDailyBudget);
+    const remainingBudget = Math.max(0, providerBudgetCap - providerLimit.usedToday);
     const acceptedForProvider = jobLimitByProvider.get(job.providerName) ?? 0;
     if (acceptedForProvider >= remainingBudget) continue;
+    if (isRealProvider && options.realProviderConfig) {
+      const acceptedRealJobs = realJobLimitByProvider.get(job.providerName) ?? 0;
+      if (acceptedRealJobs >= options.realProviderConfig.maxRealProviderSearchesPerRun) continue;
+      realJobLimitByProvider.set(job.providerName, acceptedRealJobs + 1);
+    }
     jobLimitByProvider.set(job.providerName, acceptedForProvider + 1);
     acceptedJobs.push(job);
   }
@@ -286,6 +302,25 @@ export async function runScheduledScan(options: ScheduledScanOptions): Promise<S
     const concurrency = Math.max(1, Math.min(options.config.maxProviderConcurrency, limit.concurrencyLimit));
     await runWithConcurrency(providerJobs, concurrency, async (job) => {
       const provider = providersByName.get(job.providerName);
+      const readiness = readinessByName.get(job.providerName);
+      if (readiness && !readiness.is_mock_provider && !readiness.can_search_live) {
+        const dryRunBlocked = readiness.blocking_reasons.includes("dry_run_enabled");
+        await options.repository.updateSearchJob(job.id, {
+          status: dryRunBlocked ? "dry_run_blocked" : "provider_disabled",
+          completedAt: nowIso,
+          errorCode: dryRunBlocked ? "dry_run_blocked" : "provider_readiness_blocked",
+          errorMessage: `Provider readiness blocked live search: ${readiness.blocking_reasons.join(", ")}`
+        });
+        result.jobsSkipped += 1;
+        options.logger?.log("scan_job_skipped", {
+          runId,
+          jobId: job.id,
+          providerName: job.providerName,
+          reasons: readiness.blocking_reasons
+        });
+        return;
+      }
+
       if (!provider || !provider.isEnabled()) {
         await options.repository.updateSearchJob(job.id, {
           status: "provider_disabled",

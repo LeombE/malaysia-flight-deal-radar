@@ -11,6 +11,7 @@ export type SearchJobStatus =
   | "failed"
   | "skipped"
   | "rate_limited"
+  | "dry_run_blocked"
   | "provider_disabled";
 
 export interface ScanRouteCandidate {

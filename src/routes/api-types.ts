@@ -1,4 +1,5 @@
 import type { DealLabel } from "../scoring/types.ts";
+import type { ProviderReadinessReport } from "../providers/readiness.ts";
 
 export interface AirportApiRecord {
   iata_code: string;
@@ -95,6 +96,7 @@ export interface ProviderHealthApiRecord extends ProviderLimitApiRecord {
   checked_at: string | null;
   message: string | null;
   retry_after_ms: number | null;
+  readiness?: ProviderReadinessReport;
 }
 
 export interface ApiRepository {

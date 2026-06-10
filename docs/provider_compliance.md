@@ -16,6 +16,8 @@
 - Batch scanning must respect provider daily budgets, concurrency limits, retry guidance, and disabled-provider states.
 - Phase 3 scheduler tests use MockProvider only. Optional real providers, including Amadeus, must be skipped when credentials are absent and must not be expanded during scheduler work.
 - Phase 5 API and dashboard tests use MockProvider or injected test providers only. They must not make real network calls.
+- Real providers must remain disabled by default. Live search is blocked unless `ENABLE_REAL_PROVIDERS=true`, `REAL_PROVIDER_DRY_RUN=false`, required credentials exist, a default provider is selected, and budget/retention/revalidation checks pass.
+- Provider readiness output may show boolean credential status and blocking reason codes, but never secret values, raw credentials, OAuth tokens, or provider payloads.
 - Telegram alerts must be sent only for fresh, revalidated, non-expired fares. Alert messages are normalized summaries, not raw provider payloads.
 - Telegram delivery errors must be sanitized and must never include bot tokens.
 

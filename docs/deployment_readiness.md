@@ -2,6 +2,8 @@
 
 Phase 5.5 prepares the repository for local verification and Cloudflare Worker deployment setup. It is not a real-provider launch phase.
 
+Phase 6A adds real-provider readiness guardrails. Real providers are still off by default and dry-run protected.
+
 ## Current Runtime Surfaces
 
 - Worker entrypoint: `src/index.ts`
@@ -38,6 +40,18 @@ npx wrangler dev
 
 The repository does not require real provider credentials for local verification. If Amadeus credentials are missing, Amadeus remains disabled.
 
+Provider readiness can be checked locally after startup:
+
+```powershell
+Invoke-RestMethod "http://localhost:8787/api/provider-health"
+```
+
+Expected local behavior:
+
+- `mock` is ready for demo data.
+- `amadeus` is disabled when credentials are missing.
+- live search is blocked by default with reason codes such as `real_providers_disabled`, `dry_run_enabled`, or `credentials_missing`.
+
 ## Secrets
 
 Keep these values server-side only:
@@ -73,5 +87,8 @@ Before adding a real provider in Phase 6, confirm:
 - revalidation is available before alert or deep-link display
 - rate limits and daily budgets are configured
 - tests use mocked HTTP only
+- `ENABLE_REAL_PROVIDERS=true` is used only in controlled environments
+- `REAL_PROVIDER_DRY_RUN=false` is set only after partner terms and quota limits are confirmed
+- `DEFAULT_REAL_PROVIDER` is explicitly set
 
 Do not make Amadeus the only provider, and do not add Skyscanner or Duffel until their access and compliance constraints are explicitly approved.
