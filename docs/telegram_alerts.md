@@ -48,7 +48,8 @@ Telegram delivery is best-effort. If Telegram is disabled or temporarily fails, 
 
 The app does not buy tickets automatically. Alerts are informational only; users manually verify and purchase through provider or airline/OTA links when allowed by provider rules.
 
+Dashboard and API display follow the same freshness rule. Stale cached fares can be shown only with warning state and must not be presented as live fares or purchase-ready deep links.
+
 ## Provider Scope
 
 No additional real provider is added in this phase. Amadeus remains optional/fallback only, and `MockProvider` remains the default provider for tests and local scan simulation.
-

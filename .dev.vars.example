@@ -19,7 +19,7 @@ DEFAULT_STAY_LENGTH_DAYS=5
 DEFAULT_DEPARTURE_OFFSET_DAYS=45
 PROVIDER_FAILURE_DEGRADE_THRESHOLD=3
 
-# Admin scan trigger. Leave blank to disable POST /api/admin/scan.
+# Admin endpoints. Leave blank to disable POST /api/admin/scan and POST /api/admin/revalidate.
 ADMIN_TOKEN=
 
 # Phase 4 Telegram alerts. Leave token/chat blank to disable sending safely.

@@ -11,8 +11,11 @@
 - Always revalidate a fare before alerting or displaying provider-derived live fare content.
 - Suspected deals are statistical signals only. Do not call them confirmed airline promotions unless the provider explicitly returns promotion or campaign data.
 - Historical snapshots are baseline inputs, not live fares. Dashboard and alert copy must make freshness visible.
+- JSON API and dashboard responses must expose only normalized fare summaries, scores, and provider health. Do not expose API keys, Telegram credentials, admin tokens, OAuth tokens, raw provider payloads, or revalidation payloads.
+- Dashboard deal cards may show stale or expired records only with explicit warning state. They must not label cached fares as live.
 - Batch scanning must respect provider daily budgets, concurrency limits, retry guidance, and disabled-provider states.
 - Phase 3 scheduler tests use MockProvider only. Optional real providers, including Amadeus, must be skipped when credentials are absent and must not be expanded during scheduler work.
+- Phase 5 API and dashboard tests use MockProvider or injected test providers only. They must not make real network calls.
 - Telegram alerts must be sent only for fresh, revalidated, non-expired fares. Alert messages are normalized summaries, not raw provider payloads.
 - Telegram delivery errors must be sanitized and must never include bot tokens.
 

@@ -50,3 +50,9 @@ Raw provider payloads are not persisted by the scheduler. Under `NO_CACHE`, only
 Fares can change quickly. A search response alone is not enough for alert or display eligibility. The scheduler attempts provider revalidation for each offer and only lets the scoring result become alert/display eligible when the revalidated offer is fresh, non-expired, and allowed by provider display rules.
 
 Phase 4 evaluates Telegram alert eligibility after scoring. It records sent, duplicate, disabled, and failed alert outcomes. Telegram failure does not fail the scan because fare collection and notification delivery are separate reliability concerns.
+
+## Admin Trigger
+
+`POST /api/admin/scan` calls the same scan runner as the cron entry point. It requires `Authorization: Bearer <ADMIN_TOKEN>`. If `ADMIN_TOKEN` is missing, the route is disabled.
+
+The admin route is intended for controlled local or operational triggering, not public use. It does not bypass provider budgets, disabled-provider state, retention rules, or revalidation requirements.

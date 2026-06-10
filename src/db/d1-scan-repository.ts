@@ -249,13 +249,14 @@ export class D1ScanRepository implements ScanRepository {
 
   async recordProviderSuccess(providerName: string, at: string): Promise<void> {
     await this.db.prepare(`
-      INSERT INTO provider_limits (provider, daily_budget, used_today, concurrency_limit, health_status, failure_count, updated_at)
-      VALUES (?, 0, 0, 1, 'healthy', 0, ?)
+      INSERT INTO provider_limits (provider, daily_budget, used_today, concurrency_limit, health_status, failure_count, last_success_at, updated_at)
+      VALUES (?, 0, 0, 1, 'healthy', 0, ?, ?)
       ON CONFLICT(provider) DO UPDATE SET
         health_status = 'healthy',
         failure_count = 0,
+        last_success_at = excluded.last_success_at,
         updated_at = excluded.updated_at
-    `).bind(providerName, at).run();
+    `).bind(providerName, at, at).run();
   }
 
   async insertFareCheck(record: PersistedFareCheck): Promise<void> {

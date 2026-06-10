@@ -13,6 +13,8 @@ This repository currently contains the provider scaffold and an optional Amadeus
 - Scheduled scan planning/execution lives in `src/scanner/`.
 - D1 scan persistence helpers live in `src/db/d1-scan-repository.ts`.
 - Telegram alert eligibility, formatting, and sending live in `src/alerts/`.
+- JSON API routes and dashboard rendering live in `src/routes/`.
+- Worker entry points live in `src/index.ts`.
 
 All persisted MYR prices use integer minor units:
 
@@ -42,6 +44,28 @@ Amadeus remains optional/fallback only. Phase 3 does not add or expand real prov
 Telegram is disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Alerts are only sent for fresh, revalidated `suspected_deal` or `strong_deal` results with score `>= 70`, and duplicate alerts are blocked during `ALERT_COOLDOWN_HOURS`.
 
 See `docs/telegram_alerts.md` for setup and safety notes.
+
+## Dashboard And API
+
+Phase 5 adds a minimal Cloudflare Worker HTTP surface:
+
+- `GET /health`
+- `GET /api/origins`
+- `GET /api/destinations`
+- `GET /api/deals`
+- `GET /api/price-history`
+- `GET /api/provider-health`
+- `POST /api/admin/scan`
+- `POST /api/admin/revalidate`
+- `GET /` and `GET /dashboard`
+
+The dashboard shows origin, region, country, destination, departure date, and stay-length filters. Deal cards include RM price, baseline, discount, last verified time, provider, and stale/expired warnings.
+
+Stale or expired cached fares can appear as historical context, but they are never marked as live. `/api/deals?only_recently_verified=true` returns only fresh, recently revalidated results.
+
+Admin endpoints require `Authorization: Bearer <ADMIN_TOKEN>`. If `ADMIN_TOKEN` is missing, admin endpoints are disabled. The revalidate endpoint is a safe authenticated stub in this phase.
+
+See `docs/api.md` and `docs/dashboard.md`.
 
 ## Local Runtime
 
