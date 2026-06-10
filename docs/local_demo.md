@@ -24,6 +24,8 @@ npm run demo:scan
 npm run dev
 ```
 
+Stop the dev server with `Ctrl+C` in the PowerShell window where `npm run dev` is running.
+
 Open:
 
 ```powershell
@@ -37,6 +39,13 @@ Invoke-RestMethod "http://localhost:8787/health"
 Invoke-RestMethod "http://localhost:8787/api/deals"
 Invoke-RestMethod "http://localhost:8787/api/provider-health"
 ```
+
+Expected URLs:
+
+- dashboard: `http://localhost:8787/dashboard`
+- health API: `http://localhost:8787/health`
+- deals API: `http://localhost:8787/api/deals`
+- provider health API: `http://localhost:8787/api/provider-health`
 
 ## Demo Data
 
@@ -53,7 +62,24 @@ Invoke-RestMethod "http://localhost:8787/api/provider-health"
 - at least one `suspected_deal`
 - at least one `strong_deal`
 
+The current deterministic demo scan should show a mix close to:
+
+- `strong_deal`
+- `suspected_deal`
+- `no_deal`
+
+Dashboard cards show `Freshly verified`, `Stale / needs revalidation`, or `Expired` when those states are present. Stale or expired records are shown only as warning/context, not as live fares.
+
 This makes `/api/deals` and `/dashboard` useful immediately.
+
+To reset the demo state and regenerate records:
+
+```powershell
+npm run seed
+npm run demo:scan
+```
+
+`npm run seed` writes `demo-data/demo-state.json`. The `demo-data/` directory is ignored by Git and must not be committed.
 
 ## Admin Scan
 

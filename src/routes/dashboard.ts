@@ -1,3 +1,4 @@
+import type { DealLabel } from "../scoring/types.ts";
 import type { AirportApiRecord, DealApiRecord } from "./api-types.ts";
 
 export interface DashboardFilters {
@@ -5,6 +6,8 @@ export interface DashboardFilters {
   destination_iata?: string;
   country_code?: string;
   region_group?: string;
+  deal_label?: DealLabel;
+  min_score?: number;
   departure_from?: string;
   departure_to?: string;
   stay_length_days?: number;
@@ -39,41 +42,63 @@ function uniqueSorted(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right));
 }
 
-function formatBaseline(deal: DealApiRecord): string {
-  if (deal.baseline_median_minor_myr === null) return "Baseline unavailable";
-  return `Baseline RM${(deal.baseline_median_minor_myr / 100).toFixed(2)}`;
+function formatMyrMinor(value: number | null): string {
+  if (value === null) return "Unavailable";
+  return `RM${(value / 100).toFixed(2)}`;
 }
 
 function formatVerified(value: string | null): string {
   if (!value) return "Not revalidated";
-  return value.replace("T", " ").replace(".000Z", " UTC");
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return `${value} UTC`;
+  const date = new Date(parsed);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hour = String(date.getUTCHours()).padStart(2, "0");
+  const minute = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hour}:${minute} UTC`;
 }
 
-function renderDealCard(deal: DealApiRecord): string {
+function freshnessFor(deal: DealApiRecord, generatedAt: string): { className: string; text: string } {
+  const nowMs = Date.parse(generatedAt);
+  const expiresAtMs = deal.expires_at ? Date.parse(deal.expires_at) : Number.NaN;
+  if (Number.isFinite(nowMs) && Number.isFinite(expiresAtMs) && expiresAtMs <= nowMs) {
+    return { className: "expired", text: "Expired" };
+  }
+  if (deal.is_live) {
+    return { className: "live", text: "Freshly verified" };
+  }
+  return { className: "stale", text: "Stale / needs revalidation" };
+}
+
+function renderDealCard(deal: DealApiRecord, generatedAt: string): string {
   const warning = deal.warning
     ? `<p class="warning">${escapeHtml(deal.warning)}</p>`
     : "";
-  const liveClass = deal.is_live ? "live" : "stale";
-  const liveText = deal.is_live ? "Freshly verified" : "Needs revalidation";
+  const freshness = freshnessFor(deal, generatedAt);
   return `
-    <article class="deal-card ${liveClass}">
+    <article class="deal-card ${freshness.className}">
       <div class="deal-card__top">
         <div>
           <h2>${escapeHtml(deal.origin)} to ${escapeHtml(deal.destination)}</h2>
-          <p>${escapeHtml(deal.departure_date)} to ${escapeHtml(deal.return_date)} · ${escapeHtml(deal.stay_length_days)} nights</p>
+          <p>${escapeHtml(deal.departure_date)} to ${escapeHtml(deal.return_date)} - ${escapeHtml(deal.stay_length_days)} nights</p>
         </div>
         <strong>${escapeHtml(deal.display_price_rm)}</strong>
       </div>
       <dl>
-        <div><dt>Score</dt><dd>${escapeHtml(deal.deal_score)} · ${escapeHtml(deal.deal_label)}</dd></div>
-        <div><dt>Baseline</dt><dd>${escapeHtml(formatBaseline(deal))}</dd></div>
+        <div><dt>Score</dt><dd>${escapeHtml(deal.deal_score)}</dd></div>
+        <div><dt>Deal label</dt><dd>${escapeHtml(deal.deal_label)}</dd></div>
+        <div><dt>Baseline median</dt><dd>${escapeHtml(formatMyrMinor(deal.baseline_median_minor_myr))}</dd></div>
+        <div><dt>Historical p10</dt><dd>${escapeHtml(formatMyrMinor(deal.historical_p10_minor_myr))}</dd></div>
         <div><dt>Discount</dt><dd>${escapeHtml(deal.discount_pct)}%</dd></div>
         <div><dt>Stops</dt><dd>${escapeHtml(deal.stops)}</dd></div>
         <div><dt>Carrier</dt><dd>${escapeHtml(deal.carrier || "Unknown")}</dd></div>
         <div><dt>Provider</dt><dd>${escapeHtml(deal.provider_name)}</dd></div>
-        <div><dt>Verified</dt><dd>${escapeHtml(formatVerified(deal.last_revalidated_at))}</dd></div>
+        <div><dt>Last verified</dt><dd>${escapeHtml(formatVerified(deal.last_revalidated_at))}</dd></div>
+        <div><dt>Alert status</dt><dd>${escapeHtml(deal.alert_status ?? "Not sent")}</dd></div>
       </dl>
-      <span class="status">${escapeHtml(liveText)}</span>
+      <span class="status">${escapeHtml(freshness.text)}</span>
       ${warning}
     </article>
   `;
@@ -82,8 +107,9 @@ function renderDealCard(deal: DealApiRecord): string {
 export function renderDashboardHtml(model: DashboardModel): string {
   const destinationRegions = uniqueSorted(model.destinations.map((destination) => destination.region_group));
   const destinationCountries = uniqueSorted(model.destinations.map((destination) => destination.country_code));
+  const dealLabels: DealLabel[] = ["strong_deal", "suspected_deal", "watched_price", "no_deal", "urgent_revalidate", "expired"];
   const dealsMarkup = model.deals.length > 0
-    ? model.deals.map(renderDealCard).join("")
+    ? model.deals.map((deal) => renderDealCard(deal, model.generatedAt)).join("")
     : `<section class="empty">No matching deals yet.</section>`;
 
   return `<!doctype html>
@@ -104,6 +130,7 @@ export function renderDashboardHtml(model: DashboardModel): string {
       --warn: #8a4b00;
       --warn-bg: #fff3d7;
       --stale: #6d5c7a;
+      --expired: #9f2f28;
     }
     * { box-sizing: border-box; }
     body {
@@ -157,6 +184,7 @@ export function renderDashboardHtml(model: DashboardModel): string {
       background: var(--panel);
     }
     .deal-card.stale { border-left-color: var(--stale); }
+    .deal-card.expired { border-left-color: var(--expired); }
     .deal-card__top {
       display: flex;
       justify-content: space-between;
@@ -181,6 +209,7 @@ export function renderDashboardHtml(model: DashboardModel): string {
       color: var(--accent);
     }
     .stale .status { color: var(--stale); }
+    .expired .status { color: var(--expired); }
     .warning {
       margin-top: 12px;
       padding: 9px 10px;
@@ -205,7 +234,7 @@ export function renderDashboardHtml(model: DashboardModel): string {
 <body>
   <header>
     <h1>Malaysia Flight Deal Radar</h1>
-    <p>Generated ${escapeHtml(model.generatedAt)}. Stale offers are flagged for revalidation.</p>
+    <p>Generated ${escapeHtml(formatVerified(model.generatedAt))}. Stale offers are flagged for revalidation.</p>
   </header>
   <main>
     <form method="get" action="/dashboard">
@@ -230,8 +259,17 @@ export function renderDashboardHtml(model: DashboardModel): string {
       <label>Destination
         <select name="destination_iata">
           <option value="">All destinations</option>
-          ${model.destinations.map((destination) => `<option value="${escapeHtml(destination.iata_code)}"${selected(model.filters.destination_iata, destination.iata_code)}>${escapeHtml(destination.iata_code)} · ${escapeHtml(destination.city)}</option>`).join("")}
+          ${model.destinations.map((destination) => `<option value="${escapeHtml(destination.iata_code)}"${selected(model.filters.destination_iata, destination.iata_code)}>${escapeHtml(destination.iata_code)} - ${escapeHtml(destination.city)}</option>`).join("")}
         </select>
+      </label>
+      <label>Deal label
+        <select name="deal_label">
+          <option value="">All labels</option>
+          ${dealLabels.map((label) => `<option value="${escapeHtml(label)}"${selected(model.filters.deal_label, label)}>${escapeHtml(label)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Min score
+        <input type="number" min="0" max="100" name="min_score"${valueAttr(model.filters.min_score)}>
       </label>
       <label>Depart from
         <input type="date" name="departure_from"${valueAttr(model.filters.departure_from)}>

@@ -55,6 +55,35 @@ test("local demo /api/deals returns no_deal, suspected_deal, and strong_deal exa
   assert.equal(JSON.stringify(body).includes("revalidationPayload"), false);
 });
 
+test("local demo generated state file is not required for unit tests", async () => {
+  const app = await createScannedDemoApp();
+  const response = await app.handle(new Request("https://demo.test/api/deals?deal_label=strong_deal"));
+  const body = await json<{ deals: DealApiRecord[] }>(response);
+
+  assert.equal(response.status, 200);
+  assert.ok(body.deals.length > 0);
+  assert.equal(body.deals.every((deal) => deal.deal_label === "strong_deal"), true);
+});
+
+test("local demo dashboard includes polished freshness labels and no raw provider payload", async () => {
+  const app = await createScannedDemoApp();
+  const response = await app.handle(new Request("https://demo.test/dashboard?min_score=0&deal_label=strong_deal"));
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /Baseline median/);
+  assert.equal(html.includes("Baseline RM"), false);
+  assert.match(html, /Historical p10/);
+  assert.match(html, /Last verified/);
+  assert.match(html, /Deal label/);
+  assert.match(html, /Provider/);
+  assert.match(html, /Freshly verified/);
+  assert.match(html, /name="min_score" value="0"/);
+  assert.match(html, /<option value="strong_deal" selected>/);
+  assert.equal(html.includes("revalidationPayload"), false);
+  assert.equal(html.includes("rawPayload"), false);
+});
+
 test("local demo admin scan rejects missing and wrong token", async () => {
   const withoutToken = await createScannedDemoApp();
   const disabled = await withoutToken.handle(new Request("https://demo.test/api/admin/scan", { method: "POST" }));

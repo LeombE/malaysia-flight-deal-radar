@@ -405,7 +405,7 @@ test("POST /api/admin/revalidate is authenticated and safely stubbed", async () 
 
 test("GET /dashboard renders filters, deal cards, prices, provider, and stale warnings", async () => {
   const { request } = app();
-  const response = await request("/dashboard?origin_iata=KUL");
+  const response = await request("/dashboard?origin_iata=KUL&min_score=70");
   const html = await response.text();
 
   assert.equal(response.status, 200);
@@ -414,13 +414,39 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.match(html, /EAST_ASIA/);
   assert.match(html, /BKK/);
   assert.match(html, /RM699\.00/);
-  assert.match(html, /Baseline RM999\.00/);
+  assert.match(html, /Baseline median/);
+  assert.match(html, /<dd>RM999\.00<\/dd>/);
+  assert.equal(html.includes("Baseline RM"), false);
+  assert.match(html, /Historical p10/);
+  assert.match(html, /Deal label/);
+  assert.match(html, /name="min_score" value="70"/);
+  assert.match(html, /name="stay_length_days"/);
   assert.match(html, /30\.03%/);
   assert.match(html, /Provider/);
   assert.match(html, /mock/);
+  assert.match(html, /Last verified/);
+  assert.match(html, /2026-06-10 08:00 UTC/);
+  assert.match(html, /Alert status/);
+  assert.match(html, /Freshly verified/);
   assert.match(html, /Stale fare\. Revalidate before alert or purchase\./);
+  assert.match(html, /Stale \/ needs revalidation/);
   assert.match(html, /Expired offer\. Do not treat as live fare\./);
-  assert.match(html, /Needs revalidation/);
+  assert.match(html, /Expired/);
+  assert.equal(html.includes("revalidationPayload"), false);
+  assert.equal(html.includes("rawPayload"), false);
+});
+
+test("GET /dashboard keeps deal label, date range, and stay length filter selections", async () => {
+  const { request } = app();
+  const response = await request("/dashboard?origin_iata=KUL&deal_label=strong_deal&min_score=70&departure_from=2026-07-01&departure_to=2026-10-01&stay_length_days=5");
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /<option value="strong_deal" selected>/);
+  assert.match(html, /name="min_score" value="70"/);
+  assert.match(html, /name="departure_from" value="2026-07-01"/);
+  assert.match(html, /name="departure_to" value="2026-10-01"/);
+  assert.match(html, /name="stay_length_days" value="5"/);
 });
 
 test("unsupported methods and paths return safe JSON errors", async () => {

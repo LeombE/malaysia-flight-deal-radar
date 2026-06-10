@@ -61,6 +61,8 @@ Phase 5 adds a minimal Cloudflare Worker HTTP surface:
 
 The dashboard shows origin, region, country, destination, departure date, and stay-length filters. Deal cards include RM price, baseline, discount, last verified time, provider, and stale/expired warnings.
 
+Phase 5.6 polish adds dashboard filters for deal label and minimum score. Deal cards now separate `Baseline median`, `Historical p10`, `Deal label`, `Provider`, `Last verified`, and `Alert status`.
+
 Stale or expired cached fares can appear as historical context, but they are never marked as live. `/api/deals?only_recently_verified=true` returns only fresh, recently revalidated results.
 
 Admin endpoints require `Authorization: Bearer <ADMIN_TOKEN>`. If `ADMIN_TOKEN` is missing, admin endpoints are disabled. The revalidate endpoint is a safe authenticated stub in this phase.
@@ -91,6 +93,8 @@ Start the local demo server:
 npm run dev
 ```
 
+Stop the local server with `Ctrl+C` in the PowerShell window running `npm run dev`.
+
 Open the dashboard:
 
 ```powershell
@@ -103,6 +107,24 @@ Verify JSON endpoints:
 Invoke-RestMethod "http://localhost:8787/health"
 Invoke-RestMethod "http://localhost:8787/api/deals"
 ```
+
+Expected local URLs:
+
+- dashboard: `http://localhost:8787/dashboard`
+- health: `http://localhost:8787/health`
+- deals API: `http://localhost:8787/api/deals`
+- provider health: `http://localhost:8787/api/provider-health`
+
+The deterministic demo scan should produce `strong_deal`, `suspected_deal`, and `no_deal` records. Dashboard cards show `Freshly verified`, `Stale / needs revalidation`, or `Expired` when applicable.
+
+To reset and rerun demo data:
+
+```powershell
+npm run seed
+npm run demo:scan
+```
+
+`npm run seed` writes `demo-data/demo-state.json`. The `demo-data/` directory is ignored by Git and should not be committed.
 
 The local demo uses deterministic `MockProvider` data only. It does not require Amadeus, Skyscanner, Duffel, Telegram, or any real provider credentials.
 
