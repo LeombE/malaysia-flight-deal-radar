@@ -72,6 +72,31 @@ Dashboard cards show `Freshly verified`, `Stale / needs revalidation`, or `Expir
 
 This makes `/api/deals` and `/dashboard` useful immediately.
 
+## Remote D1 Demo Baselines
+
+The local JSON demo and remote D1 demo use different storage. Local `npm run seed` creates historical snapshots in `demo-data/demo-state.json`; a newly migrated remote D1 database does not have those historical baselines yet.
+
+If the deployed dashboard works but shows only `no_deal`, seed remote D1 with mock historical baselines and run one protected admin scan:
+
+```powershell
+npm run cf:demo:seed:remote
+npm run cf:demo:verify:remote
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Start-Process "$base/dashboard"
+```
+
+Expected seeded remote demo output:
+
+- `SZB-NRT`: `strong_deal`
+- `KUL-BKK`: `strong_deal`
+- `KUL-TPE`: `suspected_deal`
+- `JHB-BKK`: `suspected_deal`
+- `KUL-SIN`: `no_deal`
+
+The remote seed uses `provider = 'mock'`, integer MYR minor units, deterministic IDs, and aggregate snapshots only. It does not call any real provider and does not write secrets or raw provider payloads.
+
 To reset the demo state and regenerate records:
 
 ```powershell

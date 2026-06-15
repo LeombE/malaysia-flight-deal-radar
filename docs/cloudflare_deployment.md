@@ -2,6 +2,8 @@
 
 Phase 7B is Cloudflare mock/demo deployment setup only. It prepares Wrangler, D1, safe defaults, and smoke checks. It does not enable real provider searches.
 
+Phase 7C adds a remote mock/demo baseline seed for D1. Use it when the deployed dashboard works but `/api/deals` shows only `no_deal` because the remote database has no historical fare snapshots yet.
+
 ## Worker Shape
 
 - Worker entrypoint: `src/index.ts`
@@ -125,7 +127,32 @@ Remote seeded airports:
 npx wrangler d1 execute malaysia-flight-deal-radar --remote --command "SELECT iata_code, airport_name, city FROM airports ORDER BY iata_code LIMIT 10;"
 ```
 
-## 8. Local Wrangler Smoke
+## 8. Seed Remote Demo Baselines
+
+The first deployed scan can show only `no_deal` because deal scoring requires at least 20 historical samples for ordinary non-watchlist route scoring. Local demo data already has those samples in `demo-data/`; remote D1 does not until you seed it.
+
+Seed deterministic mock-only baselines locally or remotely:
+
+```powershell
+npm run cf:demo:seed:local
+npm run cf:demo:seed:remote
+```
+
+Verify the remote seed:
+
+```powershell
+npm run cf:demo:verify:remote
+```
+
+The seed creates:
+
+- 20 historical mock fare snapshots each for `SZB-NRT`, `KUL-BKK`, `KUL-TPE`, `JHB-BKK`, and `KUL-SIN`
+- deterministic watchlist rows for those routes so the next admin scan includes them early
+- a safe `mock` provider limit reset so the next mock scan is not blocked by previous demo usage
+
+The seed is idempotent. It deletes only rows tagged with `remote-demo-baseline-%` and `remote-demo-watchlist-%`, and it only updates the `mock` provider limit. It does not store raw provider payloads, secrets, passenger identity, passport data, orders, payments, or tickets.
+
+## 9. Local Wrangler Smoke
 
 Start Wrangler dev:
 
@@ -151,7 +178,7 @@ Expected provider health:
 - `duffel` is disabled because credentials are missing, real providers are disabled, or dry-run is enabled.
 - No token or credential value appears in the response.
 
-## 9. Deploy
+## 10. Deploy
 
 Run a dry deploy first:
 
@@ -176,6 +203,33 @@ Start-Process "$base/dashboard"
 ```
 
 Verify `/api/provider-health` shows real providers disabled and does not expose tokens.
+
+## Remote Admin Scan After Demo Seed
+
+After remote migrations and `npm run cf:demo:seed:remote`, trigger one protected mock scan:
+
+```powershell
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+```
+
+Then verify:
+
+```powershell
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
+
+Expected remote demo labels after the scan:
+
+- `SZB-NRT`: `strong_deal`
+- `KUL-BKK`: `strong_deal`
+- `KUL-TPE`: `suspected_deal`
+- `JHB-BKK`: `suspected_deal`
+- `KUL-SIN`: `no_deal`
+
+If older no-baseline scan results are still visible, the new `strong_deal` and `suspected_deal` records should sort above them by score.
 
 ## Secrets
 
@@ -255,4 +309,3 @@ Fast provider-safety rollback:
 To stop scheduled scans, deploy with `crons = []`. If a secret is suspected to be exposed, rotate it at the provider and replace or delete the Cloudflare secret.
 
 See `docs/deployment_smoke_checklist.md` for the deployment verification checklist.
-

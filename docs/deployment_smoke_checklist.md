@@ -62,6 +62,23 @@ Expected:
 - response contains normalized deal records only
 - no raw provider payload, authorization header, token, revalidation payload, passport data, passenger identity, order, payment, or ticketing field appears
 
+If the remote D1 database has just been migrated and scanned once, it can initially show only `no_deal`. That means there are not enough historical baseline samples yet. Run the remote demo baseline seed, then trigger admin scan again:
+
+```powershell
+npm run cf:demo:seed:remote
+npm run cf:demo:verify:remote
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Invoke-RestMethod "$base/api/deals"
+```
+
+Expected after the seeded mock scan:
+
+- `SZB-NRT` and `KUL-BKK` show `strong_deal`
+- `KUL-TPE` and `JHB-BKK` show `suspected_deal`
+- `KUL-SIN` can remain `no_deal`
+- dashboard cards show baseline median and historical p10
+
 ## Admin Scan Disabled
 
 With no `ADMIN_TOKEN` secret:
@@ -119,4 +136,3 @@ If anything looks wrong:
 4. Set `TELEGRAM_DRY_RUN=true`.
 5. Deploy again.
 6. To pause cron scans, deploy with `crons = []`.
-

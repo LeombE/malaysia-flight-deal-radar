@@ -180,6 +180,20 @@ Start-Process "$base/dashboard"
 Invoke-RestMethod "http://localhost:8787/cdn-cgi/handler/scheduled?format=json"
 ```
 
+Remote D1 needs demo historical baselines before mock scan results can classify as `strong_deal` or `suspected_deal`. If the deployed dashboard initially shows only `no_deal`, run:
+
+```powershell
+npm run cf:demo:seed:remote
+npm run cf:demo:verify:remote
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
+
+The remote demo seed is mock-only and idempotent. It creates 20 historical snapshots for each seeded demo route, adds tagged watchlist rows so the next scan includes those routes, and does not store raw provider payloads or secrets.
+
 Optional deployment smoke:
 
 ```powershell

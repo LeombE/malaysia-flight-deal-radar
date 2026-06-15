@@ -19,6 +19,8 @@ For the full Cloudflare command guide, see `docs/cloudflare_deployment.md`.
 - Wrangler dev: `npm run cf:dev`
 - D1 local migrations: `npm run cf:d1:migrate:local`
 - D1 remote migrations: `npm run cf:d1:migrate:remote`
+- Remote demo baseline seed: `npm run cf:demo:seed:remote`
+- Remote demo baseline verification: `npm run cf:demo:verify:remote`
 - Dry deploy: `npm run cf:deploy:dry`
 - Deploy: `npm run cf:deploy`
 
@@ -43,6 +45,18 @@ npx wrangler d1 execute malaysia-flight-deal-radar --remote --command "SELECT na
 ```
 
 The D1 binding is `DB`. The migrations include the airport and route seed data.
+
+If remote `/api/deals` shows only `no_deal` after the first mock scan, seed mock historical baselines and scan again:
+
+```powershell
+npm run cf:demo:seed:remote
+npm run cf:demo:verify:remote
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+```
+
+This seed is limited to deterministic `mock` demo rows and does not call real providers.
 
 ## Production Safety Defaults
 
