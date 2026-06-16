@@ -84,9 +84,11 @@ DEFAULT_REAL_PROVIDER = ""
 MAX_REAL_PROVIDER_SEARCHES_PER_RUN = "1"
 MAX_REAL_PROVIDER_DAILY_BUDGET = "1"
 TELEGRAM_DRY_RUN = "true"
+ENABLE_CACHED_FARE_PROVIDER = "false"
+CACHED_PROVIDER_DRY_RUN = "true"
 ```
 
-Do not set `DUFFEL_ACCESS_TOKEN` in Cloudflare for the first mock/demo deployment. Amadeus stays optional/fallback and disabled without credentials. Skyscanner remains deferred.
+Do not set `DUFFEL_ACCESS_TOKEN` or a Travelpayouts token in Cloudflare for the first mock/demo deployment. Amadeus stays optional/fallback and disabled without credentials. Skyscanner remains deferred.
 
 ## 6. Apply D1 Migrations
 
@@ -329,6 +331,7 @@ For this first mock/demo deployment, do not set:
 
 ```powershell
 npx wrangler secret put DUFFEL_ACCESS_TOKEN
+npx wrangler secret put TRAVELPAYOUTS_TOKEN
 ```
 
 Future real-provider secrets remain server-side only:

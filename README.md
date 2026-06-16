@@ -1,12 +1,13 @@
 # Malaysia Flight Deal Radar
 
-Cloudflare Worker application for monitoring Malaysia-origin round-trip economy fares, scoring likely deals against historical baselines, and presenting a safe demo dashboard/API.
+Cloudflare Worker application for monitoring Malaysia-origin round-trip economy fares, scoring likely deals against historical baselines, and presenting a safe KUL Asia cached price calendar.
 
 Live demo: https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/dashboard
+Price calendar: https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/calendar
 
 ## Project Summary
 
-Malaysia Flight Deal Radar helps Malaysia-based travelers watch routes from `JHB`, `KUL`, and `SZB` to selected Asia destinations. The deployed demo currently uses controlled mock fare data so the full workflow can be inspected without real provider credentials or live fare API calls.
+Malaysia Flight Deal Radar helps Malaysia-based travelers watch routes from `JHB`, `KUL`, and `SZB` to selected Asia destinations. The deployed demo currently uses controlled mock fare data, and Phase 8B adds a KUL Asia Price Calendar for recently found cached fares.
 
 This is not a booking engine. It does not implement checkout, payment, ticket issuance, order creation, passenger identity storage, or passport handling.
 
@@ -20,7 +21,7 @@ This project models that workflow end to end:
 - calculate route-specific baselines
 - score current offers
 - warn when fare data is stale or expired
-- expose deal cards through a dashboard/API
+- expose deal cards and a cached price calendar through dashboard/API routes
 - keep real-provider activation behind explicit safety gates
 
 ## Target Users And Stakeholders
@@ -37,7 +38,9 @@ Current deployed mock/demo status:
 - `/health` works
 - `/api/provider-health` works
 - `/api/deals` works
+- `/api/price-calendar` works locally with controlled cached fare rows
 - `/dashboard` works
+- `/calendar` renders a KUL Asia Price Calendar
 - `strong_deal` count = 2
 - `suspected_deal` count = 2
 - `no_deal` count = 5
@@ -62,9 +65,11 @@ npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-
 ## Key Features
 
 - Cloudflare Worker dashboard and JSON API
-- D1 schema for airports, route candidates, scan jobs, fare checks, fare snapshots, scores, alerts, provider limits, settings, and watchlist
+- D1 schema for airports, route candidates, scan jobs, fare checks, fare snapshots, scores, alerts, provider limits, settings, watchlist, and cached price calendar rows
 - deterministic mock provider for local and deployed demo data
 - provider abstraction with guarded Duffel sandbox adapter and optional Amadeus fallback scaffold
+- Travelpayouts cached fare provider scaffold for recently found fares, disabled by default
+- KUL Asia Price Calendar with low-to-high RM sorting and cached/live warnings
 - median/p10-based deal scoring using integer MYR minor units
 - stale, expired, and revalidation-aware display logic
 - scheduled scan runner with route priority and provider budget controls
@@ -76,9 +81,9 @@ npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-
 
 ```text
 Cloudflare Worker
-  |-- routes: dashboard, health, APIs, admin scan
+  |-- routes: dashboard, calendar, health, APIs, admin scan
   |-- scheduler: cron/admin scan runner
-  |-- providers: MockProvider, Duffel adapter, Amadeus fallback scaffold
+  |-- providers: MockProvider, Travelpayouts cached provider, Duffel adapter, Amadeus fallback scaffold
   |-- scoring: median, p10, discount, quality penalties
   |-- alerts: eligibility, formatting, duplicate prevention
   |-- reports: sanitized deployment health snapshot
@@ -108,6 +113,14 @@ Detailed architecture: `docs/architecture.md`.
 7. Dashboard/API show sorted deal cards with baseline, discount, provider, and freshness warnings.
 8. Optional alert logic evaluates score, freshness, provider display rules, and duplicate cooldown.
 
+Price calendar flow:
+
+1. KUL Asia destination seeds cover Southeast Asia, Taiwan, Japan, and China.
+2. Controlled demo calendar rows are seeded for KUL routes such as TPE, BKK, SIN, NRT, KIX, PVG, and CAN.
+3. Travelpayouts normalization can ingest cached latest/month/week matrix responses when explicitly enabled.
+4. `/api/price-calendar` returns normalized rows sorted by RM price, stops, duration, then departure date.
+5. `/calendar` displays cached/recently found fares with explicit recheck warnings and no live/bookable claim.
+
 ## Deal Scoring Methodology
 
 Prices are stored as integer MYR minor units, not floating point. The scoring engine calculates:
@@ -136,10 +149,12 @@ More detail: `docs/scoring_methodology.md`.
 ## Safety Design
 
 - real providers disabled by default
+- cached fare providers disabled and dry-run protected by default
 - no scraping of Google Flights, airline sites, OTA sites, login-protected pages, or CAPTCHA-protected pages
 - no booking, order, payment, ticket, passport, or passenger identity storage
 - no raw provider payload persistence by default
 - no stale cached provider result is shown as a live fare
+- Travelpayouts Data API rows are treated as cached/recently found fares, not guaranteed live fares
 - provider-derived display/deep-link content requires revalidation
 - secrets stay out of repository files
 - tests use mocked HTTP only
@@ -149,11 +164,12 @@ More detail: `docs/scoring_methodology.md`.
 The provider registry supports multiple providers but keeps live providers behind guardrails:
 
 - MockProvider is the default demo provider.
+- Travelpayouts is a cached data provider, disabled unless explicitly configured.
 - Duffel sandbox adapter exists and is tested, but is not enabled on Cloudflare.
 - Amadeus remains optional/fallback and disabled without credentials.
 - Skyscanner is intentionally deferred until access and terms are confirmed.
 
-Provider readiness reports show whether a provider is configured, enabled, dry-run blocked, budget blocked, or disabled. Public readiness output must not expose credentials.
+Provider readiness reports show whether a provider is configured, enabled, dry-run blocked, budget blocked, cached-only, or disabled. Public readiness output must not expose credentials.
 
 More detail: `docs/provider_readiness.md` and `docs/provider_compliance.md`.
 
@@ -189,11 +205,13 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - dashboard and APIs are online
 - remote seed/reset/report tooling works
 - real providers are disabled
-- no live commercial flight coverage is claimed
+- `/calendar` can show controlled cached fare examples
+- no live commercial flight coverage or bookability guarantee is claimed
 
 ## Limitations
 
-- deployed demo does not use live commercial flight provider data
+- deployed demo does not provide live commercial flight coverage
+- cached price calendar rows are recently found/demo fares and must be rechecked before purchase
 - provider access, rate limits, retention rights, and display rights still need final verification before activation
 - Telegram on Cloudflare is implemented but not the focus of the deployed demo evidence
 - dashboard is intentionally minimal and operational, not a consumer product UI
@@ -201,9 +219,10 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 
 ## Future Roadmap
 
-- Phase 8B: Telegram on Cloudflare
-- Phase 8C: Skyscanner access preparation
-- Phase 8D: real provider activation checklist
+- Phase 8B: Travelpayouts cached fare provider and KUL Asia Price Calendar
+- Phase 8C: Telegram on Cloudflare
+- Phase 8D: Skyscanner access preparation
+- Phase 8E: real provider activation checklist
 - Phase 9: limited live provider dry run
 - Phase 10: production monitoring
 - Phase 11: GitHub Actions or scheduled report automation
@@ -224,6 +243,7 @@ Open:
 
 ```powershell
 Start-Process "http://localhost:8787/dashboard"
+Start-Process "http://localhost:8787/calendar"
 ```
 
 ## Run Tests
@@ -259,6 +279,16 @@ DEFAULT_REAL_PROVIDER=
 
 Do not configure live/sandbox Duffel or Amadeus on Cloudflare until the real-provider activation checklist is complete. Do not add Skyscanner until access and terms are confirmed.
 
+Keep cached fare providers disabled unless intentionally testing:
+
+```text
+ENABLE_CACHED_FARE_PROVIDER=false
+CACHED_PROVIDER_DRY_RUN=true
+DEFAULT_CACHED_PROVIDER=travelpayouts
+```
+
+Do not store a real Travelpayouts token in repository files.
+
 ## Supporting Docs
 
 - `docs/architecture.md`
@@ -269,3 +299,5 @@ Do not configure live/sandbox Duffel or Amadeus on Cloudflare until the real-pro
 - `docs/deployment_smoke_checklist.md`
 - `docs/provider_readiness.md`
 - `docs/provider_compliance.md`
+- `docs/price_calendar.md`
+- `docs/providers/travelpayouts.md`

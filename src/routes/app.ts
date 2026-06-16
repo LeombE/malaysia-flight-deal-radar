@@ -1,9 +1,13 @@
+import { parseCachedProviderConfig, type CachedProviderConfig } from "../config/cached-providers.ts";
 import { parseRealProviderConfig, type RealProviderConfig } from "../config/real-providers.ts";
 import { parseSchedulerConfig } from "../config/scheduler.ts";
 import { D1ApiRepository } from "../db/d1-api-repository.ts";
 import { D1ScanRepository, type D1DatabaseLike } from "../db/d1-scan-repository.ts";
+import { createCachedProviderRegistry } from "../providers/cached-registry.ts";
+import type { CachedFareProvider } from "../providers/cached-types.ts";
 import { createProviderRegistry } from "../providers/registry.ts";
 import {
+  buildCachedProviderReadinessReports,
   buildProviderReadinessReports,
   type ProviderReadinessLimit,
   type ProviderReadinessReport
@@ -16,10 +20,15 @@ import type {
   ApiRepository,
   DealFilters,
   DestinationFilters,
+  PriceCalendarFilters,
+  PriceCalendarFreshnessLabel,
+  PriceCalendarSortBy,
+  PriceCalendarSortOrder,
   PriceHistoryFilters,
   ProviderHealthApiRecord,
   ProviderLimitApiRecord
 } from "./api-types.ts";
+import { renderCalendarHtml } from "./calendar.ts";
 import { renderDashboardHtml } from "./dashboard.ts";
 
 export interface FlightRadarEnv {
@@ -32,8 +41,10 @@ export interface AppDependencies {
   apiRepository: ApiRepository;
   scanRepository?: ScanRepository;
   providers: FlightProvider[];
+  cachedProviders?: CachedFareProvider[];
   schedulerConfig: SchedulerConfig;
   realProviderConfig?: RealProviderConfig;
+  cachedProviderConfig?: CachedProviderConfig;
   providerReadinessEnv?: Record<string, string | undefined>;
   providerReadiness?: ProviderReadinessReport[];
   runScan?: () => Promise<ScanRunResult>;
@@ -76,6 +87,17 @@ function upperParam(params: URLSearchParams, ...keys: string[]): string | undefi
   return undefined;
 }
 
+function normalizedRegionParam(params: URLSearchParams, ...keys: string[]): string | undefined {
+  const value = stringParam(params, ...keys);
+  if (!value) return undefined;
+  const normalized = value.trim().toUpperCase().replaceAll(" ", "_").replaceAll("-", "_");
+  if (normalized === "SEA" || normalized === "SOUTHEAST_ASIA") return "SOUTHEAST_ASIA";
+  if (normalized === "TAIWAN") return "TAIWAN";
+  if (normalized === "JAPAN") return "JAPAN";
+  if (normalized === "CHINA" || normalized === "MAINLAND_CHINA") return "MAINLAND_CHINA";
+  return normalized;
+}
+
 function stringParam(params: URLSearchParams, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = params.get(key)?.trim();
@@ -111,10 +133,48 @@ function destinationFilters(params: URLSearchParams): DestinationFilters {
   const filters: DestinationFilters = {};
   const originIata = upperParam(params, "origin_iata", "origin");
   const countryCode = upperParam(params, "country_code", "country");
-  const regionGroup = upperParam(params, "region_group", "region");
+  const regionGroup = normalizedRegionParam(params, "region_group", "region", "destination_region");
   if (originIata) filters.origin_iata = originIata;
   if (countryCode) filters.country_code = countryCode;
   if (regionGroup) filters.region_group = regionGroup;
+  return filters;
+}
+
+function priceCalendarFilters(params: URLSearchParams): PriceCalendarFilters {
+  const validFreshness = new Set<PriceCalendarFreshnessLabel>(["fresh", "recent", "cached", "expired"]);
+  const validSortBy = new Set<PriceCalendarSortBy>(["price", "departure_date", "duration", "stops"]);
+  const validSortOrder = new Set<PriceCalendarSortOrder>(["asc", "desc"]);
+  const freshness = stringParam(params, "freshness") as PriceCalendarFreshnessLabel | undefined;
+  const sortBy = stringParam(params, "sort_by") as PriceCalendarSortBy | undefined;
+  const sortOrder = stringParam(params, "sort_order") as PriceCalendarSortOrder | undefined;
+  const cabinClass = stringParam(params, "cabin_class")?.toLowerCase();
+  const destinationIata = upperParam(params, "destination_iata", "destination");
+  const destinationRegion = normalizedRegionParam(params, "destination_region", "region");
+  const country = upperParam(params, "destination_country", "country_code", "country");
+  const hasDestinationScope = Boolean(destinationIata || destinationRegion || country);
+  const filters: PriceCalendarFilters = {
+    origin_iata: upperParam(params, "origin_iata", "origin") ?? "KUL",
+    stay_length_days: integerParam(params, "stay_length_days", "stay_length") ?? 5,
+    cabin_class: "economy",
+    adults: integerParam(params, "adults") ?? 1,
+    sort_by: validSortBy.has(sortBy ?? "price") ? sortBy ?? "price" : "price",
+    sort_order: validSortOrder.has(sortOrder ?? "asc") ? sortOrder ?? "asc" : "asc"
+  };
+  const effectiveRegion = destinationRegion ?? (hasDestinationScope ? undefined : "TAIWAN");
+  const effectiveDestination = destinationIata ?? (hasDestinationScope ? undefined : "TPE");
+  if (effectiveRegion) filters.destination_region = effectiveRegion;
+  if (effectiveDestination) filters.destination_iata = effectiveDestination;
+  const departureFrom = stringParam(params, "departure_from");
+  const departureTo = stringParam(params, "departure_to");
+  const maxStops = integerParam(params, "max_stops");
+  const includeExpired = booleanParam(params, "include_expired");
+  if (country) filters.destination_country = country;
+  if (departureFrom) filters.departure_from = departureFrom;
+  if (departureTo) filters.departure_to = departureTo;
+  if (maxStops !== undefined) filters.max_stops = maxStops;
+  if (freshness && validFreshness.has(freshness)) filters.freshness = freshness;
+  if (includeExpired !== undefined) filters.include_expired = includeExpired;
+  if (cabinClass && cabinClass !== "economy") filters.cabin_class = "economy";
   return filters;
 }
 
@@ -183,8 +243,10 @@ async function providerHealthRecords(
   repository: ApiRepository,
   providers: FlightProvider[],
   options: {
+    cachedProviders?: CachedFareProvider[];
     env?: Record<string, string | undefined>;
     realProviderConfig?: RealProviderConfig;
+    cachedProviderConfig?: CachedProviderConfig;
   } = {}
 ): Promise<ProviderHealthApiRecord[]> {
   const limits = await repository.listProviderLimits();
@@ -202,6 +264,13 @@ async function providerHealthRecords(
         providerLimits: readinessLimits
       })
     : [];
+  if (options.cachedProviders && options.env && options.cachedProviderConfig) {
+    readinessReports.push(...buildCachedProviderReadinessReports({
+      providers: options.cachedProviders,
+      env: options.env,
+      config: options.cachedProviderConfig
+    }));
+  }
   const readinessByName = new Map(readinessReports.map((report) => [report.provider_name, report]));
   const seen = new Set<string>();
   const records: ProviderHealthApiRecord[] = [];
@@ -212,6 +281,40 @@ async function providerHealthRecords(
       status: "unhealthy",
       checkedAt: new Date().toISOString(),
       message: error instanceof Error ? error.message : "Provider health check failed"
+    }));
+    const limit = limitsByProvider.get(provider.name);
+    const fallback: ProviderLimitApiRecord = {
+      provider_name: provider.name,
+      retention_mode: provider.getRetentionMode(),
+      daily_budget: null,
+      used_today: null,
+      remaining_budget: null,
+      health_status: health.status,
+      last_success_at: null,
+      last_failure_at: null,
+      failure_count: 0
+    };
+    const merged = limit ?? fallback;
+    const record: ProviderHealthApiRecord = {
+      ...merged,
+      enabled: provider.isEnabled(),
+      status: health.status,
+      checked_at: health.checkedAt,
+      message: health.message ?? null,
+      retry_after_ms: health.retryAfterMs ?? null
+    };
+    const readiness = readinessByName.get(provider.name);
+    if (readiness) record.readiness = readiness;
+    records.push(record);
+    seen.add(provider.name);
+  }
+
+  for (const provider of options.cachedProviders ?? []) {
+    const health: ProviderHealth = await provider.getProviderHealth().catch((error: unknown): ProviderHealth => ({
+      provider: provider.name,
+      status: "unhealthy",
+      checkedAt: new Date().toISOString(),
+      message: error instanceof Error ? error.message : "Cached provider health check failed"
     }));
     const limit = limitsByProvider.get(provider.name);
     const fallback: ProviderLimitApiRecord = {
@@ -261,18 +364,27 @@ export function createDefaultAppDependencies(env: FlightRadarEnv): AppDependenci
   }
   const envVars = stringEnv(env);
   const providers = createProviderRegistry(envVars);
+  const cachedProviders = createCachedProviderRegistry(envVars);
   const realProviderConfig = parseRealProviderConfig(envVars);
+  const cachedProviderConfig = parseCachedProviderConfig(envVars);
   const providerReadiness = buildProviderReadinessReports({
     providers,
     env: envVars,
     config: realProviderConfig
   });
+  providerReadiness.push(...buildCachedProviderReadinessReports({
+    providers: cachedProviders,
+    env: envVars,
+    config: cachedProviderConfig
+  }));
   return {
     apiRepository: new D1ApiRepository(env.DB),
     scanRepository: new D1ScanRepository(env.DB),
     providers,
+    cachedProviders,
     schedulerConfig: parseSchedulerConfig(envVars),
     realProviderConfig,
+    cachedProviderConfig,
     providerReadinessEnv: envVars,
     providerReadiness
   };
@@ -288,9 +400,16 @@ export async function handleAppRequest(
 
   if (url.pathname === "/health") {
     if (request.method !== "GET") return methodNotAllowed();
-    const healthOptions: { env?: Record<string, string | undefined>; realProviderConfig?: RealProviderConfig } = {};
+    const healthOptions: {
+      cachedProviders?: CachedFareProvider[];
+      env?: Record<string, string | undefined>;
+      realProviderConfig?: RealProviderConfig;
+      cachedProviderConfig?: CachedProviderConfig;
+    } = {};
+    if (dependencies.cachedProviders) healthOptions.cachedProviders = dependencies.cachedProviders;
     if (dependencies.providerReadinessEnv) healthOptions.env = dependencies.providerReadinessEnv;
     if (dependencies.realProviderConfig) healthOptions.realProviderConfig = dependencies.realProviderConfig;
+    if (dependencies.cachedProviderConfig) healthOptions.cachedProviderConfig = dependencies.cachedProviderConfig;
     const providers = await providerHealthRecords(dependencies.apiRepository, dependencies.providers, healthOptions);
     return jsonResponse({
       ok: true,
@@ -316,6 +435,27 @@ export async function handleAppRequest(
       origins,
       destinations,
       deals,
+      filters,
+      generatedAt: now.toISOString()
+    }));
+  }
+
+  if (url.pathname === "/calendar") {
+    if (request.method !== "GET") return methodNotAllowed();
+    const filters = priceCalendarFilters(url.searchParams);
+    const destinationFilterInput: DestinationFilters = {};
+    if (filters.origin_iata) destinationFilterInput.origin_iata = filters.origin_iata;
+    if (filters.destination_country) destinationFilterInput.country_code = filters.destination_country;
+    if (filters.destination_region) destinationFilterInput.region_group = filters.destination_region;
+    const [origins, destinations, rows] = await Promise.all([
+      dependencies.apiRepository.listOrigins(),
+      dependencies.apiRepository.listDestinations(destinationFilterInput),
+      dependencies.apiRepository.listPriceCalendar(filters, now)
+    ]);
+    return htmlResponse(renderCalendarHtml({
+      origins,
+      destinations,
+      rows,
       filters,
       generatedAt: now.toISOString()
     }));
@@ -354,11 +494,26 @@ export async function handleAppRequest(
     });
   }
 
+  if (url.pathname === "/api/price-calendar") {
+    if (request.method !== "GET") return methodNotAllowed();
+    return jsonResponse({
+      ok: true,
+      price_calendar: await dependencies.apiRepository.listPriceCalendar(priceCalendarFilters(url.searchParams), now)
+    });
+  }
+
   if (url.pathname === "/api/provider-health") {
     if (request.method !== "GET") return methodNotAllowed();
-    const healthOptions: { env?: Record<string, string | undefined>; realProviderConfig?: RealProviderConfig } = {};
+    const healthOptions: {
+      cachedProviders?: CachedFareProvider[];
+      env?: Record<string, string | undefined>;
+      realProviderConfig?: RealProviderConfig;
+      cachedProviderConfig?: CachedProviderConfig;
+    } = {};
+    if (dependencies.cachedProviders) healthOptions.cachedProviders = dependencies.cachedProviders;
     if (dependencies.providerReadinessEnv) healthOptions.env = dependencies.providerReadinessEnv;
     if (dependencies.realProviderConfig) healthOptions.realProviderConfig = dependencies.realProviderConfig;
+    if (dependencies.cachedProviderConfig) healthOptions.cachedProviderConfig = dependencies.cachedProviderConfig;
     return jsonResponse({
       ok: true,
       providers: await providerHealthRecords(dependencies.apiRepository, dependencies.providers, healthOptions)

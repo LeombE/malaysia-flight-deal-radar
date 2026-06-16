@@ -5,6 +5,8 @@ import type {
   DealApiRecord,
   DealFilters,
   DestinationFilters,
+  PriceCalendarApiRecord,
+  PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
   ProviderLimitApiRecord
@@ -54,6 +56,35 @@ interface PriceHistoryRow {
   revalidated_at: string | null;
 }
 
+interface PriceCalendarRow {
+  origin_iata: string;
+  destination_iata: string;
+  destination_country: string;
+  destination_region: string;
+  departure_date: string;
+  return_date: string;
+  stay_length_days: number;
+  trip_type: "round_trip";
+  cabin_class: "economy";
+  adults: number;
+  amount_minor_myr: number | null;
+  original_amount: number;
+  original_currency: string;
+  airline_iata: string | null;
+  flight_number: string | null;
+  stops: number | null;
+  total_duration_minutes: number | null;
+  provider_name: string;
+  source_endpoint: string;
+  retrieved_at: string;
+  expires_at: string | null;
+  freshness_label: PriceCalendarApiRecord["freshness_label"];
+  search_link: string | null;
+  warning: string | null;
+  deal_label: PriceCalendarApiRecord["deal_label"];
+  deal_score: number | null;
+}
+
 interface ProviderLimitRow {
   provider: string;
   retention_mode: string;
@@ -101,6 +132,62 @@ function warningFor(row: DealRow, now: Date, freshWithinMinutes: number): { warn
     return { warning: "Stale fare. Revalidate before alert or purchase.", isLive: false };
   }
   return { warning: null, isLive: true };
+}
+
+function calendarWarning(row: PriceCalendarRow): string {
+  return row.warning ||
+    "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.";
+}
+
+function mapPriceCalendarRow(row: PriceCalendarRow, now: Date): PriceCalendarApiRecord {
+  const expiresAtMs = row.expires_at ? Date.parse(row.expires_at) : Number.NaN;
+  const expired = Number.isFinite(expiresAtMs) && expiresAtMs <= now.getTime();
+  const freshnessLabel = expired ? "expired" : row.freshness_label;
+  return {
+    origin_iata: row.origin_iata,
+    destination_iata: row.destination_iata,
+    destination_country: row.destination_country,
+    destination_region: row.destination_region,
+    departure_date: row.departure_date,
+    return_date: row.return_date,
+    stay_length_days: row.stay_length_days,
+    trip_type: row.trip_type,
+    cabin_class: row.cabin_class,
+    adults: row.adults,
+    amount_minor_myr: row.amount_minor_myr,
+    display_price_rm: row.amount_minor_myr === null ? "Unavailable" : `RM${formatMyrFromMinor(row.amount_minor_myr) ?? "0.00"}`,
+    original_amount: row.original_amount,
+    original_currency: row.original_currency,
+    airline_iata: row.airline_iata,
+    flight_number: row.flight_number,
+    stops: row.stops,
+    total_duration_minutes: row.total_duration_minutes,
+    provider_name: row.provider_name,
+    source_endpoint: row.source_endpoint,
+    retrieved_at: row.retrieved_at,
+    expires_at: row.expires_at,
+    freshness_label: freshnessLabel,
+    is_live: false,
+    is_bookable_claim: false,
+    search_link: row.search_link,
+    warning: calendarWarning(row),
+    deal_label: row.deal_label,
+    deal_score: row.deal_score
+  };
+}
+
+function calendarSortClause(filters: PriceCalendarFilters): string {
+  const direction = filters.sort_order === "desc" ? "DESC" : "ASC";
+  if (filters.sort_by === "departure_date") {
+    return `pc.departure_date ${direction}, pc.amount_minor_myr ASC, COALESCE(pc.stops, 99) ASC`;
+  }
+  if (filters.sort_by === "duration") {
+    return `COALESCE(pc.total_duration_minutes, 999999) ${direction}, pc.amount_minor_myr ASC, COALESCE(pc.stops, 99) ASC`;
+  }
+  if (filters.sort_by === "stops") {
+    return `COALESCE(pc.stops, 99) ${direction}, pc.amount_minor_myr ASC, COALESCE(pc.total_duration_minutes, 999999) ASC`;
+  }
+  return `CASE WHEN pc.amount_minor_myr IS NULL THEN 1 ELSE 0 END ASC, pc.amount_minor_myr ${direction}, COALESCE(pc.stops, 99) ASC, COALESCE(pc.total_duration_minutes, 999999) ASC, pc.departure_date ASC`;
 }
 
 export class D1ApiRepository implements ApiRepository {
@@ -328,6 +415,96 @@ export class D1ApiRepository implements ApiRepository {
       retrieved_at: row.observed_at,
       revalidated_at: row.revalidated_at
     }));
+  }
+
+  async listPriceCalendar(filters: PriceCalendarFilters, now: Date): Promise<PriceCalendarApiRecord[]> {
+    const clauses = ["1 = 1"];
+    const params: unknown[] = [];
+    if (filters.origin_iata) {
+      clauses.push("pc.origin_iata = ?");
+      params.push(filters.origin_iata);
+    }
+    if (filters.destination_iata) {
+      clauses.push("pc.destination_iata = ?");
+      params.push(filters.destination_iata);
+    }
+    if (filters.destination_region) {
+      clauses.push("pc.destination_region = ?");
+      params.push(filters.destination_region);
+    }
+    if (filters.destination_country) {
+      clauses.push("pc.destination_country = ?");
+      params.push(filters.destination_country);
+    }
+    if (filters.departure_from) {
+      clauses.push("pc.departure_date >= ?");
+      params.push(filters.departure_from);
+    }
+    if (filters.departure_to) {
+      clauses.push("pc.departure_date <= ?");
+      params.push(filters.departure_to);
+    }
+    if (filters.stay_length_days !== undefined) {
+      clauses.push("pc.stay_length_days = ?");
+      params.push(filters.stay_length_days);
+    }
+    if (filters.cabin_class) {
+      clauses.push("pc.cabin_class = ?");
+      params.push(filters.cabin_class);
+    }
+    if (filters.adults !== undefined) {
+      clauses.push("pc.adults = ?");
+      params.push(filters.adults);
+    }
+    if (filters.max_stops !== undefined) {
+      clauses.push("COALESCE(pc.stops, 99) <= ?");
+      params.push(filters.max_stops);
+    }
+    if (filters.freshness) {
+      clauses.push("pc.freshness_label = ?");
+      params.push(filters.freshness);
+    }
+    if (!filters.include_expired) {
+      clauses.push("pc.freshness_label <> 'expired'");
+      clauses.push("(pc.expires_at IS NULL OR pc.expires_at > ?)");
+      params.push(now.toISOString());
+    }
+
+    const result = await this.db.prepare(`
+      SELECT
+        pc.origin_iata,
+        pc.destination_iata,
+        pc.destination_country,
+        pc.destination_region,
+        pc.departure_date,
+        pc.return_date,
+        pc.stay_length_days,
+        pc.trip_type,
+        pc.cabin_class,
+        pc.adults,
+        pc.amount_minor_myr,
+        pc.original_amount,
+        pc.original_currency,
+        pc.airline_iata,
+        pc.flight_number,
+        pc.stops,
+        pc.total_duration_minutes,
+        pc.provider_name,
+        pc.source_endpoint,
+        pc.retrieved_at,
+        pc.expires_at,
+        pc.freshness_label,
+        pc.search_link,
+        pc.warning,
+        pc.deal_label,
+        pc.deal_score
+      FROM price_calendar_rows pc
+      WHERE ${clauses.join(" AND ")}
+      ORDER BY ${calendarSortClause(filters)}
+      LIMIT 200
+    `).bind(...params).all<PriceCalendarRow>();
+
+    return (result.results ?? []).map((row) => mapPriceCalendarRow(row, now));
   }
 
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {

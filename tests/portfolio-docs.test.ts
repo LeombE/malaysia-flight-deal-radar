@@ -55,6 +55,7 @@ test("portfolio docs honestly describe mock demo status and avoid live coverage 
   const combined = portfolioDocs.map(readText).join("\n");
 
   assert.match(combined, /controlled mock fare data/i);
+  assert.match(combined, /cached price-calendar demo/i);
   assert.match(combined, /real providers (?:remain|are) disabled/i);
   assert.match(combined, /Duffel sandbox adapter is tested/i);
   assert.match(combined, /Do not claim live commercial flight coverage/i);
@@ -87,9 +88,10 @@ test("roadmap includes required future phases without enabling real providers no
   const roadmap = readText("docs/roadmap.md");
 
   for (const required of [
-    "Phase 8B: Telegram On Cloudflare",
-    "Phase 8C: Skyscanner Access Preparation",
-    "Phase 8D: Real Provider Activation Checklist",
+    "Phase 8B: Travelpayouts Cached Fare Calendar",
+    "Phase 8C: Telegram On Cloudflare",
+    "Phase 8D: Skyscanner Access Preparation",
+    "Phase 8E: Real Provider Activation Checklist",
     "Phase 9: Limited Live Provider Dry Run",
     "Phase 10: Production Monitoring",
     "Phase 11: GitHub Actions / Scheduled Report"
@@ -115,4 +117,3 @@ test("repository hygiene keeps private local artifacts out of git", () => {
     assert.match(gitignore, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 });
-

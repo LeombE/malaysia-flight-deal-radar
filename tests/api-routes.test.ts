@@ -10,6 +10,8 @@ import type {
   DealApiRecord,
   DealFilters,
   DestinationFilters,
+  PriceCalendarApiRecord,
+  PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
   ProviderLimitApiRecord
@@ -159,10 +161,76 @@ const priceHistory: PriceHistoryApiRecord[] = [
   }
 ];
 
+const priceCalendar: PriceCalendarApiRecord[] = [
+  {
+    origin_iata: "KUL",
+    destination_iata: "TPE",
+    destination_country: "TW",
+    destination_region: "TAIWAN",
+    departure_date: "2026-07-25",
+    return_date: "2026-07-30",
+    stay_length_days: 5,
+    trip_type: "round_trip",
+    cabin_class: "economy",
+    adults: 1,
+    amount_minor_myr: 45_900,
+    display_price_rm: "RM459.00",
+    original_amount: 459,
+    original_currency: "MYR",
+    airline_iata: "D7",
+    flight_number: "376",
+    stops: 0,
+    total_duration_minutes: 280,
+    provider_name: "travelpayouts_demo",
+    source_endpoint: "demo_seed",
+    retrieved_at: NOW.toISOString(),
+    expires_at: null,
+    freshness_label: "fresh",
+    is_live: false,
+    is_bookable_claim: false,
+    search_link: "https://www.aviasales.com/search/KUL260725TPE2607301",
+    warning: "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.",
+    deal_label: null,
+    deal_score: null
+  },
+  {
+    origin_iata: "KUL",
+    destination_iata: "BKK",
+    destination_country: "TH",
+    destination_region: "SOUTHEAST_ASIA",
+    departure_date: "2026-07-25",
+    return_date: "2026-07-30",
+    stay_length_days: 5,
+    trip_type: "round_trip",
+    cabin_class: "economy",
+    adults: 1,
+    amount_minor_myr: 44_100,
+    display_price_rm: "RM441.00",
+    original_amount: 441,
+    original_currency: "MYR",
+    airline_iata: "AK",
+    flight_number: "884",
+    stops: 0,
+    total_duration_minutes: 135,
+    provider_name: "travelpayouts_demo",
+    source_endpoint: "demo_seed",
+    retrieved_at: NOW.toISOString(),
+    expires_at: null,
+    freshness_label: "fresh",
+    is_live: false,
+    is_bookable_claim: false,
+    search_link: null,
+    warning: "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.",
+    deal_label: null,
+    deal_score: null
+  }
+];
+
 class MemoryApiRepository implements ApiRepository {
   lastDestinationFilters: DestinationFilters | null = null;
   lastDealFilters: DealFilters | null = null;
   lastPriceHistoryFilters: PriceHistoryFilters | null = null;
+  lastPriceCalendarFilters: PriceCalendarFilters | null = null;
   providerLimits: ProviderLimitApiRecord[] = [
     {
       provider_name: "mock",
@@ -217,6 +285,19 @@ class MemoryApiRepository implements ApiRepository {
       if (filters.provider_name && item.provider !== filters.provider_name) return false;
       return true;
     });
+  }
+
+  async listPriceCalendar(filters: PriceCalendarFilters): Promise<PriceCalendarApiRecord[]> {
+    this.lastPriceCalendarFilters = filters;
+    return priceCalendar
+      .filter((item) => {
+        if (filters.origin_iata && item.origin_iata !== filters.origin_iata) return false;
+        if (filters.destination_iata && item.destination_iata !== filters.destination_iata) return false;
+        if (filters.destination_region && item.destination_region !== filters.destination_region) return false;
+        if (filters.destination_country && item.destination_country !== filters.destination_country) return false;
+        return true;
+      })
+      .sort((left, right) => (left.amount_minor_myr ?? 9999999) - (right.amount_minor_myr ?? 9999999));
   }
 
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {
@@ -340,6 +421,32 @@ test("GET /api/price-history returns normalized history without raw payloads", a
   assert.equal(JSON.stringify(body).includes("raw"), false);
 });
 
+test("GET /api/price-calendar returns cached KUL TPE rows without live claims", async () => {
+  const { request, repository } = app();
+  const response = await request("/api/price-calendar");
+  const body = await json<{ price_calendar: PriceCalendarApiRecord[] }>(response);
+
+  assert.equal(response.status, 200);
+  assert.equal(repository.lastPriceCalendarFilters?.origin_iata, "KUL");
+  assert.equal(repository.lastPriceCalendarFilters?.destination_iata, "TPE");
+  assert.equal(repository.lastPriceCalendarFilters?.destination_region, "TAIWAN");
+  assert.equal(body.price_calendar.length, 1);
+  assert.equal(body.price_calendar[0]?.amount_minor_myr, 45_900);
+  assert.equal(body.price_calendar[0]?.is_live, false);
+  assert.equal(body.price_calendar[0]?.is_bookable_claim, false);
+  assert.match(body.price_calendar[0]?.warning ?? "", /Not guaranteed live/);
+  assert.equal(JSON.stringify(body).includes("raw"), false);
+});
+
+test("GET /api/price-calendar applies region filter and sorts by price", async () => {
+  const { request } = app();
+  const response = await request("/api/price-calendar?destination_iata=&destination_region=Southeast%20Asia");
+  const body = await json<{ price_calendar: PriceCalendarApiRecord[] }>(response);
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.price_calendar.map((row) => row.destination_iata), ["BKK"]);
+});
+
 test("GET /api/provider-health includes Amadeus as disabled when credentials are missing", async () => {
   const { request } = app();
   const response = await request("/api/provider-health");
@@ -433,6 +540,25 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.match(html, /Expired offer\. Do not treat as live fare\./);
   assert.match(html, /Expired/);
   assert.equal(html.includes("revalidationPayload"), false);
+  assert.equal(html.includes("rawPayload"), false);
+});
+
+test("GET /calendar renders cached fare warning labels and filters", async () => {
+  const { request } = app();
+  const response = await request("/calendar?destination_region=Taiwan&destination_iata=TPE");
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /KUL Asia Price Calendar/);
+  assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
+  assert.match(html, /Not guaranteed live/);
+  assert.match(html, /Price may have changed/);
+  assert.match(html, /name="destination_region"/);
+  assert.match(html, /name="destination_iata"/);
+  assert.match(html, /name="stay_length_days"/);
+  assert.match(html, /name="max_stops"/);
+  assert.match(html, /RM459\.00/);
+  assert.match(html, /travelpayouts_demo/);
   assert.equal(html.includes("rawPayload"), false);
 });
 

@@ -2,7 +2,7 @@
 
 ## Two-Line Resume Version
 
-- Built and deployed a Cloudflare Worker flight-deal radar for Malaysia-origin routes, with D1 persistence, scheduled scans, route prioritization, median/p10 scoring, dashboard/API views, and sanitized deployment health reporting.
+- Built and deployed a Cloudflare Worker flight-deal radar for Malaysia-origin routes, with D1 persistence, scheduled scans, median/p10 scoring, dashboard/API views, KUL Asia cached price calendar, and sanitized deployment health reporting.
 - Implemented provider-readiness guardrails, mock/demo deployment tooling, Duffel sandbox adapter tests, and stale-fare safety controls while keeping real providers disabled until access, retention, and rate-limit terms are verified.
 
 ## Detailed STAR Version
@@ -11,7 +11,7 @@ Situation: Malaysia-based travelers need a practical way to identify unusually c
 
 Task: Build an end-to-end flight deal radar that demonstrates the data model, scan workflow, scoring logic, dashboard/API, deployment flow, and provider safety controls without claiming live commercial coverage before provider terms are approved.
 
-Action: Implemented a TypeScript Cloudflare Worker with D1 schema, deterministic MockProvider, provider registry, scheduled scan runner, route prioritization, fare snapshot persistence, median/p10 scoring, stale/expired warnings, Telegram alert eligibility, remote demo seed/reset scripts, and a sanitized deployment health report. Added guardrails that keep Duffel and Amadeus disabled on Cloudflare and block real-provider use by default.
+Action: Implemented a TypeScript Cloudflare Worker with D1 schema, deterministic MockProvider, provider registry, scheduled scan runner, route prioritization, fare snapshot persistence, median/p10 scoring, stale/expired warnings, Telegram alert eligibility, KUL Asia cached price calendar, remote demo seed/reset scripts, and a sanitized deployment health report. Added guardrails that keep Duffel and Amadeus disabled on Cloudflare, and keep Travelpayouts cached data disabled/dry-run protected by default.
 
 Result: Deployed a working online demo showing 2 `strong_deal`, 2 `suspected_deal`, and 5 `no_deal` records from controlled mock data, with `/health`, `/api/provider-health`, `/api/deals`, and `/dashboard` verified. The repository includes tests, deployment docs, portfolio evidence guidance, and provider activation gates.
 
@@ -25,6 +25,7 @@ Result: Deployed a working online demo showing 2 `strong_deal`, 2 `suspected_dea
 - robust statistics for price scoring
 - operational safety around stale data and provider retention rules
 - API and dashboard implementation
+- cached fare calendar design with explicit non-live warnings
 - alert eligibility and deduplication logic
 - deployment automation and smoke-check documentation
 - sanitized reporting for release/portfolio evidence
@@ -49,8 +50,8 @@ Result: Deployed a working online demo showing 2 `strong_deal`, 2 `suspected_dea
 - Do not claim live commercial flight coverage.
 - Do not claim live Skyscanner integration.
 - Do not claim live Duffel or Amadeus searches on Cloudflare.
+- Do not claim Travelpayouts cached rows are live or bookable without rechecking.
 - Do not claim booking, ticketing, payment, checkout, passport handling, or passenger identity support.
 - Do not claim airline-confirmed promotions unless a future provider explicitly returns campaign metadata.
 
-Accurate wording: real-provider readiness is implemented, the Duffel sandbox adapter is tested, Amadeus remains an optional fallback scaffold, and the online demo currently uses controlled mock fare data.
-
+Accurate wording: real-provider readiness is implemented, the Duffel sandbox adapter is tested, Amadeus remains an optional fallback scaffold, Travelpayouts cached provider support is guarded, and the online demo currently uses controlled mock fare/calendar data.

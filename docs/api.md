@@ -1,6 +1,6 @@
 # JSON API
 
-Phase 5 exposes a small Cloudflare Worker API for health checks, dashboard data, and controlled admin actions. Responses are JSON unless the dashboard HTML route is requested.
+Phase 5 exposes a small Cloudflare Worker API for health checks, dashboard data, and controlled admin actions. Phase 8B adds a cached price-calendar API. Responses are JSON unless an HTML dashboard/calendar route is requested.
 
 ## Public Endpoints
 
@@ -9,6 +9,7 @@ Phase 5 exposes a small Cloudflare Worker API for health checks, dashboard data,
 - `GET /api/destinations`: active destination airports.
 - `GET /api/deals`: normalized scored deals.
 - `GET /api/price-history`: normalized historical price snapshots.
+- `GET /api/price-calendar`: cached/recently found fare calendar rows.
 - `GET /api/provider-health`: provider registry and persisted provider-limit health.
 
 Supported deal filters include:
@@ -28,6 +29,25 @@ Supported deal filters include:
 
 Use `only_recently_verified=true` when the client needs live-display-safe deals. Without it, stale or expired records may be returned for historical context, but each record includes `is_live` and `warning`.
 
+Supported price-calendar filters include:
+
+- `origin_iata` or `origin`
+- `destination_iata` or `destination`
+- `destination_region` or `region`
+- `destination_country` or `country`
+- `departure_from`
+- `departure_to`
+- `stay_length_days` or `stay_length`
+- `cabin_class`
+- `adults`
+- `max_stops`
+- `freshness`
+- `include_expired`
+- `sort_by`
+- `sort_order`
+
+Price-calendar rows are cached discovery records. They return `is_live=false`, `is_bookable_claim=false`, and warning text by design.
+
 ## Admin Endpoints
 
 - `POST /api/admin/scan`: runs the same scan runner used by cron.
@@ -46,3 +66,5 @@ If `ADMIN_TOKEN` is not configured, admin endpoints return disabled responses. W
 API responses must not include raw provider payloads, provider API keys, Telegram credentials, OAuth tokens, admin tokens, or revalidation payloads. `NO_CACHE` providers remain normalized-only; the API reads from fare checks, snapshots, scores, alerts, and provider limit summaries.
 
 Amadeus remains optional and disabled unless credentials are present. The provider-health endpoint may show it as disabled; that is expected and must not break the dashboard.
+
+Travelpayouts may appear as a disabled cached provider. It is separate from live provider readiness and must not be treated as confirmed bookable fare coverage.

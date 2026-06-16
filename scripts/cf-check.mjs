@@ -19,7 +19,11 @@ const requiredSnippets = [
   ["REAL_PROVIDER_DRY_RUN = \"true\"", "real provider dry-run enabled"],
   ["DEFAULT_REAL_PROVIDER = \"\"", "no default real provider"],
   ["MAX_REAL_PROVIDER_SEARCHES_PER_RUN = \"1\"", "low real-provider search limit"],
-  ["MAX_REAL_PROVIDER_DAILY_BUDGET = \"1\"", "low real-provider daily budget"]
+  ["MAX_REAL_PROVIDER_DAILY_BUDGET = \"1\"", "low real-provider daily budget"],
+  ["ENABLE_CACHED_FARE_PROVIDER = \"false\"", "cached fare provider disabled"],
+  ["CACHED_PROVIDER_DRY_RUN = \"true\"", "cached provider dry-run enabled"],
+  ["DEFAULT_CACHED_PROVIDER = \"travelpayouts\"", "default cached provider placeholder"],
+  ["TRAVELPAYOUTS_RETENTION_MODE = \"AGGREGATE_ONLY\"", "Travelpayouts aggregate-only retention"]
 ];
 
 const forbiddenSnippets = [
@@ -27,6 +31,7 @@ const forbiddenSnippets = [
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_CHAT_ID",
   "DUFFEL_ACCESS_TOKEN",
+  "TRAVELPAYOUTS_TOKEN",
   "AMADEUS_CLIENT_ID",
   "AMADEUS_CLIENT_SECRET",
   "SKYSCANNER_API_KEY",

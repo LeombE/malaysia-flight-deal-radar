@@ -46,8 +46,9 @@ Expected:
 - `mock` is enabled and healthy/available for demo use
 - `amadeus` is disabled unless credentials are intentionally configured
 - `duffel` is disabled in the first mock/demo deployment
+- `travelpayouts` is disabled unless cached-provider guardrails are intentionally opened
 - readiness reasons include safe blockers such as `real_providers_disabled`, `dry_run_enabled`, or `credentials_missing`
-- no `ADMIN_TOKEN`, Telegram token, Duffel token, Amadeus secret, or future Skyscanner key appears
+- no `ADMIN_TOKEN`, Telegram token, Duffel token, Travelpayouts token, Amadeus secret, or future Skyscanner key appears
 
 ## Deals API
 
@@ -134,7 +135,10 @@ Before considering this smoke complete, verify:
 - `MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1`
 - `MAX_REAL_PROVIDER_DAILY_BUDGET=1`
 - `TELEGRAM_DRY_RUN=true`
+- `ENABLE_CACHED_FARE_PROVIDER=false`
+- `CACHED_PROVIDER_DRY_RUN=true`
 - no `DUFFEL_ACCESS_TOKEN` is set in Cloudflare for the first mock/demo deployment
+- no Travelpayouts token is set in Cloudflare unless intentionally testing cached fare discovery
 - Skyscanner has not been added
 
 ## Portfolio Evidence Report

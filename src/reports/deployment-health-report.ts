@@ -118,6 +118,7 @@ function canSearchLive(provider: ProviderHealthApiRecord): string {
 }
 
 function providerRole(provider: ProviderHealthApiRecord): string {
+  if (provider.readiness?.cached_data_source === true) return "cached_provider";
   return provider.provider_name === "mock" ? "demo_provider" : "real_provider";
 }
 
@@ -213,4 +214,3 @@ export function formatDeploymentHealthReport(snapshot: DeploymentHealthSnapshot)
 
   return sanitizeReportText(report);
 }
-

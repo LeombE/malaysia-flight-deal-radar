@@ -1,6 +1,6 @@
 # Provider Readiness
 
-Phase 6A added safety guardrails for future real provider integrations. Phase 6B adds a Duffel adapter behind those guardrails. Skyscanner is still deferred.
+Phase 6A added safety guardrails for future real provider integrations. Phase 6B adds a Duffel adapter behind those guardrails. Phase 8B adds Travelpayouts as a cached fare data provider. Skyscanner is still deferred.
 
 ## Defaults
 
@@ -15,6 +15,16 @@ DEFAULT_REAL_PROVIDER=
 These defaults protect local demo runs, tests, dashboard use, cron scans, and admin-triggered scans from accidentally using live API quota.
 
 MockProvider remains the default local/demo provider. Amadeus remains optional fallback only and is disabled unless both Amadeus credentials are configured. Duffel is disabled unless a token is configured and every real-provider guardrail is intentionally opened.
+
+Cached fare providers are also disabled by default:
+
+```text
+ENABLE_CACHED_FARE_PROVIDER=false
+CACHED_PROVIDER_DRY_RUN=true
+DEFAULT_CACHED_PROVIDER=travelpayouts
+```
+
+Travelpayouts readiness is separate from live provider readiness. It can search cached/recently found data only when cached-provider flags are intentionally opened and a server-side token is configured.
 
 The default real-provider quota is intentionally tiny:
 
@@ -65,6 +75,9 @@ The readiness section reports:
 - timeout and retry settings
 - `can_search_live`
 - `can_revalidate_live`
+- `cached_data_source`
+- `live_guarantee`
+- `can_search_cached`
 - `test_mode` for providers that expose safe test-token detection
 - blocking reason codes
 
@@ -87,8 +100,13 @@ Common reasons include:
 - `missing_revalidation_support`
 - `unsupported_currency`
 - `revalidation_not_available`
+- `cached_provider_disabled`
+- `cached_provider_dry_run_enabled`
+- `cached_provider_not_selected`
 
 Duffel uses `unsupported_currency` and `revalidation_not_available` when those provider-specific checks fail. A token beginning with `duffel_test_` reports `test_mode=true` without exposing the token.
+
+Travelpayouts reports `cached_data_source=true`, `live_guarantee=false`, and never reports `can_search_live=true`. Its rows are price calendar inputs only and must not be used as confirmed live/bookable offers.
 
 ## Cloudflare Defaults
 
@@ -98,6 +116,8 @@ Production deployments should start with:
 ENABLE_REAL_PROVIDERS=false
 REAL_PROVIDER_DRY_RUN=true
 DEFAULT_REAL_PROVIDER=
+ENABLE_CACHED_FARE_PROVIDER=false
+CACHED_PROVIDER_DRY_RUN=true
 TELEGRAM_DRY_RUN=true
 ```
 

@@ -11,28 +11,38 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
    - Capture at least one `strong_deal` and one `suspected_deal`.
    - Include visible price, baseline median, discount, provider, and last verified fields.
 
-2. `/health` JSON
+2. KUL Asia Price Calendar
+   - URL: `https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/calendar`
+   - Capture cached fare rows sorted by RM price.
+   - Include visible warning text: cached fare, recheck before purchase, not guaranteed live.
+
+3. `/health` JSON
    - Shows Worker health status.
    - Confirms the deployed Worker responds.
 
-3. `/api/provider-health` JSON
+4. `/api/provider-health` JSON
    - Shows `mock` healthy/available.
    - Shows real providers disabled.
    - Confirm no credential values appear.
 
-4. `/api/deals` JSON
+5. `/api/deals` JSON
    - Shows normalized deal records.
    - Capture deal-label counts or sample records.
    - Do not expose raw provider payloads.
 
-5. Deployment health report output
+6. `/api/price-calendar` JSON
+   - Shows normalized calendar rows.
+   - Confirm `is_live=false` and `is_bookable_claim=false`.
+   - Do not expose raw provider payloads.
+
+7. Deployment health report output
    - Command:
      ```powershell
      npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
      ```
    - Capture health status, provider readiness, deal counts, and top strong/suspected rows.
 
-6. Tests passing
+8. Tests passing
    - Capture:
      ```powershell
      npm run typecheck --if-present
@@ -40,7 +50,7 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
      npm run cf:check
      ```
 
-7. Cloudflare Worker URL
+9. Cloudflare Worker URL
    - Capture the public dashboard URL or browser address bar.
    - Do not capture private account settings, tokens, or secret configuration screens.
 
@@ -51,4 +61,3 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
 3. Add provider-health JSON proving real providers are disabled.
 4. Add tests passing.
 5. Add a short caption explaining that the online demo uses controlled mock fare data and real-provider activation is intentionally gated.
-

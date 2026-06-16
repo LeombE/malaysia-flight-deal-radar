@@ -1,4 +1,8 @@
+import type { CachedProviderConfig } from "../config/cached-providers.ts";
 import type { RealProviderConfig } from "../config/real-providers.ts";
+import { isTravelpayoutsConfigured } from "../config/travelpayouts.ts";
+import { parseTravelpayoutsConfig } from "../config/travelpayouts.ts";
+import type { CachedFareProvider } from "./cached-types.ts";
 import type { FlightProvider, ProviderRetentionMode } from "./types.ts";
 
 export type ProviderReadinessBlockingReason =
@@ -12,7 +16,10 @@ export type ProviderReadinessBlockingReason =
   | "missing_currency_support"
   | "missing_revalidation_support"
   | "unsupported_currency"
-  | "revalidation_not_available";
+  | "revalidation_not_available"
+  | "cached_provider_disabled"
+  | "cached_provider_dry_run_enabled"
+  | "cached_provider_not_selected";
 
 export interface ProviderReadinessLimit {
   providerName: string;
@@ -41,6 +48,9 @@ export interface ProviderReadinessReport {
   revalidate_before_alert_minutes: number;
   can_search_live: boolean;
   can_revalidate_live: boolean;
+  cached_data_source?: boolean;
+  live_guarantee?: boolean;
+  can_search_cached?: boolean;
   blocking_reasons: ProviderReadinessBlockingReason[];
 }
 
@@ -191,6 +201,68 @@ export function buildProviderReadinessReports(input: {
       if (input.providerLimits) reportInput.providerLimits = input.providerLimits;
       return buildProviderReadinessReport(reportInput);
     })
+    .sort((left, right) => left.provider_name.localeCompare(right.provider_name));
+}
+
+export function buildCachedProviderReadinessReport(input: {
+  provider: CachedFareProvider;
+  env: Record<string, string | undefined>;
+  config: CachedProviderConfig;
+}): ProviderReadinessReport {
+  const providerName = input.provider.name;
+  const reasons: ProviderReadinessBlockingReason[] = [];
+  const travelpayoutsConfig = providerName === "travelpayouts" ? parseTravelpayoutsConfig(input.env) : null;
+  const credentialsConfigured = travelpayoutsConfig
+    ? isTravelpayoutsConfigured(travelpayoutsConfig)
+    : input.provider.isEnabled();
+
+  if (!input.config.enableCachedFareProvider) reasons.push("cached_provider_disabled");
+  if (input.config.cachedProviderDryRun) reasons.push("cached_provider_dry_run_enabled");
+  if (!credentialsConfigured) reasons.push("credentials_missing");
+  if (!input.provider.isEnabled()) reasons.push("provider_disabled");
+  if (input.config.defaultCachedProvider !== providerName) reasons.push("cached_provider_not_selected");
+  if (input.provider.getRetentionMode() === "RAW_ALLOWED") reasons.push("unsupported_retention_mode");
+
+  const canSearchCached = reasons.length === 0;
+  return {
+    provider_name: providerName,
+    is_mock_provider: false,
+    demo_ready: false,
+    credentials_required: true,
+    credentials_configured: credentialsConfigured,
+    test_mode: false,
+    enabled: input.provider.isEnabled(),
+    real_providers_enabled: false,
+    dry_run_enabled: input.config.cachedProviderDryRun,
+    default_provider_selected: input.config.defaultCachedProvider === providerName,
+    retention_mode: input.provider.getRetentionMode(),
+    daily_budget: 0,
+    used_today: 0,
+    remaining_budget: 0,
+    timeout_ms: travelpayoutsConfig?.timeoutMs ?? 0,
+    retry_limit: travelpayoutsConfig?.retryLimit ?? 0,
+    revalidate_before_display_minutes: 0,
+    revalidate_before_alert_minutes: 0,
+    can_search_live: false,
+    can_revalidate_live: false,
+    cached_data_source: true,
+    live_guarantee: false,
+    can_search_cached: canSearchCached,
+    blocking_reasons: [...new Set(reasons)]
+  };
+}
+
+export function buildCachedProviderReadinessReports(input: {
+  providers: readonly CachedFareProvider[];
+  env: Record<string, string | undefined>;
+  config: CachedProviderConfig;
+}): ProviderReadinessReport[] {
+  return input.providers
+    .map((provider) => buildCachedProviderReadinessReport({
+      provider,
+      env: input.env,
+      config: input.config
+    }))
     .sort((left, right) => left.provider_name.localeCompare(right.provider_name));
 }
 

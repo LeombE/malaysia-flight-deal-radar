@@ -7,6 +7,8 @@ import type {
   DealApiRecord,
   DealFilters,
   DestinationFilters,
+  PriceCalendarApiRecord,
+  PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
   ProviderLimitApiRecord
@@ -125,6 +127,39 @@ interface InternalDealApiRecord extends DealApiRecord {
   region_group: string;
 }
 
+function comparablePrice(row: PriceCalendarApiRecord): number {
+  return row.amount_minor_myr ?? Number.POSITIVE_INFINITY;
+}
+
+function compareNumber(left: number | null, right: number | null, direction: 1 | -1): number {
+  const leftValue = left ?? Number.POSITIVE_INFINITY;
+  const rightValue = right ?? Number.POSITIVE_INFINITY;
+  return leftValue === rightValue ? 0 : leftValue < rightValue ? -direction : direction;
+}
+
+function sortCalendarRows(left: PriceCalendarApiRecord, right: PriceCalendarApiRecord, filters: PriceCalendarFilters): number {
+  const direction: 1 | -1 = filters.sort_order === "desc" ? -1 : 1;
+  if (filters.sort_by === "departure_date") {
+    return direction * left.departure_date.localeCompare(right.departure_date) ||
+      comparablePrice(left) - comparablePrice(right) ||
+      compareNumber(left.stops, right.stops, 1);
+  }
+  if (filters.sort_by === "duration") {
+    return compareNumber(left.total_duration_minutes, right.total_duration_minutes, direction) ||
+      comparablePrice(left) - comparablePrice(right) ||
+      compareNumber(left.stops, right.stops, 1);
+  }
+  if (filters.sort_by === "stops") {
+    return compareNumber(left.stops, right.stops, direction) ||
+      comparablePrice(left) - comparablePrice(right) ||
+      compareNumber(left.total_duration_minutes, right.total_duration_minutes, 1);
+  }
+  return direction * (comparablePrice(left) - comparablePrice(right)) ||
+    compareNumber(left.stops, right.stops, 1) ||
+    compareNumber(left.total_duration_minutes, right.total_duration_minutes, 1) ||
+    left.departure_date.localeCompare(right.departure_date);
+}
+
 export class DemoRepository implements ApiRepository, ScanRepository {
   readonly state: DemoState;
 
@@ -239,6 +274,38 @@ export class DemoRepository implements ApiRepository, ScanRepository {
         retrieved_at: snapshot.observedAt,
         revalidated_at: this.latestRevalidationFor(snapshot)
       }));
+  }
+
+  async listPriceCalendar(filters: PriceCalendarFilters, now: Date): Promise<PriceCalendarApiRecord[]> {
+    return (this.state.priceCalendarRows ?? [])
+      .map((row) => {
+        const expiresAtMs = row.expires_at ? Date.parse(row.expires_at) : Number.NaN;
+        return {
+          ...row,
+          freshness_label: Number.isFinite(expiresAtMs) && expiresAtMs <= now.getTime()
+            ? "expired"
+            : row.freshness_label,
+          is_live: false as const,
+          is_bookable_claim: false as const
+        };
+      })
+      .filter((row) => {
+        if (filters.origin_iata && row.origin_iata !== filters.origin_iata) return false;
+        if (filters.destination_iata && row.destination_iata !== filters.destination_iata) return false;
+        if (filters.destination_region && row.destination_region !== filters.destination_region) return false;
+        if (filters.destination_country && row.destination_country !== filters.destination_country) return false;
+        if (filters.departure_from && row.departure_date < filters.departure_from) return false;
+        if (filters.departure_to && row.departure_date > filters.departure_to) return false;
+        if (filters.stay_length_days !== undefined && row.stay_length_days !== filters.stay_length_days) return false;
+        if (filters.cabin_class && row.cabin_class !== filters.cabin_class) return false;
+        if (filters.adults !== undefined && row.adults !== filters.adults) return false;
+        if (filters.max_stops !== undefined && (row.stops ?? 99) > filters.max_stops) return false;
+        if (filters.freshness && row.freshness_label !== filters.freshness) return false;
+        if (!filters.include_expired && row.freshness_label === "expired") return false;
+        return true;
+      })
+      .sort((left, right) => sortCalendarRows(left, right, filters))
+      .slice(0, 200);
   }
 
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {

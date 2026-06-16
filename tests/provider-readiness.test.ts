@@ -33,6 +33,8 @@ import type {
   DealApiRecord,
   DealFilters,
   DestinationFilters,
+  PriceCalendarApiRecord,
+  PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
   ProviderHealthApiRecord,
@@ -171,6 +173,10 @@ class MinimalApiRepository implements ApiRepository {
   }
 
   async listPriceHistory(_filters: PriceHistoryFilters): Promise<PriceHistoryApiRecord[]> {
+    return [];
+  }
+
+  async listPriceCalendar(_filters: PriceCalendarFilters): Promise<PriceCalendarApiRecord[]> {
     return [];
   }
 

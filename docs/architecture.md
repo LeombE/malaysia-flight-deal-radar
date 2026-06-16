@@ -1,6 +1,6 @@
 # Architecture
 
-Malaysia Flight Deal Radar is a Cloudflare Worker application backed by D1. The deployed portfolio demo uses MockProvider data while preserving the same scan, persistence, scoring, and dashboard pipeline intended for future authorized providers.
+Malaysia Flight Deal Radar is a Cloudflare Worker application backed by D1. The deployed portfolio demo uses MockProvider data for deal scoring and controlled cached fare data for the KUL Asia Price Calendar, while preserving the same safety boundaries intended for future authorized providers.
 
 ## Runtime Overview
 
@@ -9,6 +9,7 @@ Browser / API client
   -> Cloudflare Worker routes
   -> D1 repositories
   -> Scheduler / provider registry
+  -> Cached fare calendar repository
   -> Scoring and alert eligibility
   -> Dashboard, JSON APIs, deployment report
 ```
@@ -17,10 +18,12 @@ Browser / API client
 
 - `GET /health`: returns Worker status and provider summaries.
 - `GET /dashboard` and `GET /`: renders the deal dashboard.
+- `GET /calendar`: renders the KUL Asia Price Calendar.
 - `GET /api/origins`: lists Malaysia origin airports.
 - `GET /api/destinations`: lists destination airports with filters.
 - `GET /api/deals`: returns normalized scored deals.
 - `GET /api/price-history`: returns normalized fare history.
+- `GET /api/price-calendar`: returns cached/recently found fare calendar rows.
 - `GET /api/provider-health`: returns provider readiness without credentials.
 - `POST /api/admin/scan`: protected scan trigger.
 - `POST /api/admin/revalidate`: reserved authenticated endpoint.
@@ -37,6 +40,7 @@ Browser / API client
 - `provider_limits`: budget, concurrency, retention, and health state.
 - `settings`: key/value operational settings.
 - `watchlist`: user/demo route watchlist entries.
+- `price_calendar_rows`: cached/recently found calendar fares with live/bookable flags forced false.
 
 ## Provider Abstraction
 
@@ -57,6 +61,10 @@ MockProvider is the default local and deployed demo provider. It produces determ
 ## Duffel Sandbox Adapter
 
 The Duffel adapter builds economy return-trip offer requests, normalizes offer responses, handles short-lived offer semantics, and requires revalidation before display or alerts. It is covered by mocked HTTP tests. It is not enabled on Cloudflare in the current deployment and does not create orders.
+
+## Travelpayouts Cached Provider
+
+Travelpayouts is modeled as a cached fare data provider, not a live offer provider. It supports `v2/prices/latest`, `v2/prices/month-matrix`, and `v2/prices/week-matrix` normalization into price calendar rows. Rows are stored without raw payloads, marked `is_live=false`, and displayed with recheck warnings. It is disabled unless cached-provider flags are explicitly enabled, dry-run is off, and a server-side token is configured.
 
 ## Amadeus Optional Fallback
 
@@ -103,12 +111,17 @@ The deployment report tooling queries read-only endpoints:
 
 It outputs a sanitized Markdown report with health status, provider readiness, deal counts, top strong deals, and top suspected deals.
 
+## Price Calendar
+
+The calendar is a separate read path from the deal dashboard. It sorts cached rows by RM amount, stops, duration, and departure date, and shows provider/freshness warnings rather than alert eligibility. It is suitable for low-budget discovery but not for claiming a fare is currently bookable.
+
 ## Safety Guardrails
 
 - real providers disabled by default
 - dry-run mode enabled by default
 - MockProvider remains the deployed demo provider
 - Skyscanner is deferred until access and terms are confirmed
+- Travelpayouts cached data is never labeled live or guaranteed bookable
 - no provider payload caching by default
 - no stale provider result is shown as live
 - revalidation required before alert/display eligibility

@@ -28,12 +28,16 @@ test("wrangler example contains safe mock/demo deployment defaults and no secret
   assert.match(text, /DEFAULT_REAL_PROVIDER = ""/);
   assert.match(text, /MAX_REAL_PROVIDER_SEARCHES_PER_RUN = "1"/);
   assert.match(text, /MAX_REAL_PROVIDER_DAILY_BUDGET = "1"/);
+  assert.match(text, /ENABLE_CACHED_FARE_PROVIDER = "false"/);
+  assert.match(text, /CACHED_PROVIDER_DRY_RUN = "true"/);
+  assert.match(text, /TRAVELPAYOUTS_RETENTION_MODE = "AGGREGATE_ONLY"/);
 
   for (const forbidden of [
     "ADMIN_TOKEN",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
     "DUFFEL_ACCESS_TOKEN",
+    "TRAVELPAYOUTS_TOKEN",
     "AMADEUS_CLIENT_ID",
     "AMADEUS_CLIENT_SECRET",
     "SKYSCANNER_API_KEY",
@@ -81,6 +85,7 @@ test("deployment smoke checklist documents mock-only expectations and token safe
 
   assert.match(text, /mock` is enabled/);
   assert.match(text, /duffel` is disabled/);
+  assert.match(text, /travelpayouts` is disabled/);
   assert.match(text, /ADMIN_TOKEN/);
   assert.match(text, /no token value is echoed/);
   assert.match(text, /DUFFEL_ACCESS_TOKEN` is set in Cloudflare/);
@@ -112,6 +117,7 @@ test("mock-only deployment API smoke works without real network calls", async ()
   assert.ok(providers.providers.find((provider) => provider.provider_name === "mock" && provider.enabled));
   assert.ok(providers.providers.find((provider) => provider.provider_name === "amadeus" && !provider.enabled));
   assert.ok(providers.providers.find((provider) => provider.provider_name === "duffel" && !provider.enabled));
+  assert.ok(providers.providers.find((provider) => provider.provider_name === "travelpayouts" && !provider.enabled));
   assert.ok(deals.deals.length > 0);
   assert.match(dashboard, /Malaysia Flight Deal Radar/);
   assert.equal(serialized.includes("DUFFEL_ACCESS_TOKEN"), false);

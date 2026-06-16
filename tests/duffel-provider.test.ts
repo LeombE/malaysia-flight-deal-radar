@@ -19,6 +19,8 @@ import type {
   DealApiRecord,
   DealFilters,
   DestinationFilters,
+  PriceCalendarApiRecord,
+  PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
   ProviderHealthApiRecord,
@@ -230,6 +232,7 @@ class MinimalApiRepository implements ApiRepository {
   async listDestinations(_filters: DestinationFilters): Promise<AirportApiRecord[]> { return []; }
   async listDeals(_filters: DealFilters): Promise<DealApiRecord[]> { return []; }
   async listPriceHistory(_filters: PriceHistoryFilters): Promise<PriceHistoryApiRecord[]> { return []; }
+  async listPriceCalendar(_filters: PriceCalendarFilters): Promise<PriceCalendarApiRecord[]> { return []; }
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {
     return [{
       provider_name: "duffel",

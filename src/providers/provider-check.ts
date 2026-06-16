@@ -1,5 +1,7 @@
+import { parseCachedProviderConfig } from "../config/cached-providers.ts";
 import { parseRealProviderConfig } from "../config/real-providers.ts";
-import { buildProviderReadinessReports, type ProviderReadinessLimit } from "./readiness.ts";
+import { createCachedProviderRegistry } from "./cached-registry.ts";
+import { buildCachedProviderReadinessReports, buildProviderReadinessReports, type ProviderReadinessLimit } from "./readiness.ts";
 import { createProviderRegistry, type ProviderRegistryOptions } from "./registry.ts";
 
 export interface ProviderCheckRecord {
@@ -10,6 +12,9 @@ export interface ProviderCheckRecord {
   readiness_passed: boolean;
   can_search_live: boolean;
   can_revalidate_live: boolean;
+  cached_data_source: boolean;
+  live_guarantee: boolean;
+  can_search_cached: boolean;
   blocking_reasons: string[];
   last_smoke: ProviderCheckLastSmoke | null;
 }
@@ -38,7 +43,9 @@ export function buildProviderCheckReport(input: {
   };
   if (input.now) registryOptions.now = input.now;
   const providers = createProviderRegistry(input.env, registryOptions);
+  const cachedProviders = createCachedProviderRegistry(input.env, registryOptions);
   const config = parseRealProviderConfig(input.env);
+  const cachedConfig = parseCachedProviderConfig(input.env);
   const readinessInput: Parameters<typeof buildProviderReadinessReports>[0] = {
     providers,
     env: input.env,
@@ -49,20 +56,31 @@ export function buildProviderCheckReport(input: {
     (input.lastSmoke ?? []).map((record) => [record.provider_name, record])
   );
 
+  const readinessReports = buildProviderReadinessReports(readinessInput);
+  readinessReports.push(...buildCachedProviderReadinessReports({
+    providers: cachedProviders,
+    env: input.env,
+    config: cachedConfig
+  }));
+
   const preferredOrder = new Map([
     ["mock", 0],
     ["amadeus", 1],
-    ["duffel", 2]
+    ["duffel", 2],
+    ["travelpayouts", 3]
   ]);
-  return buildProviderReadinessReports(readinessInput)
+  return readinessReports
     .map((report) => ({
       provider_name: report.provider_name,
       configured: report.credentials_configured,
       enabled: report.enabled,
       dry_run: report.dry_run_enabled,
-      readiness_passed: report.can_search_live && report.can_revalidate_live,
+      readiness_passed: (report.can_search_live && report.can_revalidate_live) || report.can_search_cached === true,
       can_search_live: report.can_search_live,
       can_revalidate_live: report.can_revalidate_live,
+      cached_data_source: report.cached_data_source === true,
+      live_guarantee: report.live_guarantee === true,
+      can_search_cached: report.can_search_cached === true,
       blocking_reasons: report.blocking_reasons,
       last_smoke: lastSmokeByProvider.get(report.provider_name) ?? null
     }))
@@ -86,6 +104,9 @@ export function formatProviderCheckReport(records: readonly ProviderCheckRecord[
     lines.push(`  readiness_passed: ${bool(record.readiness_passed)}`);
     lines.push(`  can_search_live: ${bool(record.can_search_live)}`);
     lines.push(`  can_revalidate_live: ${bool(record.can_revalidate_live)}`);
+    lines.push(`  cached_data_source: ${bool(record.cached_data_source)}`);
+    lines.push(`  live_guarantee: ${bool(record.live_guarantee)}`);
+    lines.push(`  can_search_cached: ${bool(record.can_search_cached)}`);
     lines.push(`  blocking_reasons: ${record.blocking_reasons.length > 0 ? record.blocking_reasons.join(", ") : "none"}`);
     if (record.last_smoke) {
       const route = record.last_smoke.origin && record.last_smoke.destination

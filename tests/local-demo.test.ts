@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/index.ts";
 import { createScannedDemoApp } from "../src/demo/demo-app.ts";
-import type { DealApiRecord } from "../src/routes/api-types.ts";
+import type { DealApiRecord, PriceCalendarApiRecord } from "../src/routes/api-types.ts";
 
 async function json<T>(response: Response): Promise<T> {
   return await response.json() as T;
@@ -27,6 +27,7 @@ test("local demo /health returns ok without real provider network calls", async 
   assert.equal(body.status, "ok");
   assert.equal(body.providers.some((provider) => provider.provider_name === "mock"), true);
   assert.equal(body.providers.some((provider) => provider.provider_name === "amadeus" && provider.enabled === false), true);
+  assert.equal(body.providers.some((provider) => provider.provider_name === "travelpayouts" && provider.enabled === false), true);
 });
 
 test("local demo dashboard renders seeded deal HTML", async () => {
@@ -82,6 +83,33 @@ test("local demo dashboard includes polished freshness labels and no raw provide
   assert.match(html, /<option value="strong_deal" selected>/);
   assert.equal(html.includes("revalidationPayload"), false);
   assert.equal(html.includes("rawPayload"), false);
+});
+
+test("local demo price calendar returns cached demo rows without live claims", async () => {
+  const app = await createScannedDemoApp();
+  const response = await app.handle(new Request("https://demo.test/api/price-calendar"));
+  const body = await json<{ price_calendar: PriceCalendarApiRecord[] }>(response);
+
+  assert.equal(response.status, 200);
+  assert.ok(body.price_calendar.length >= 3);
+  assert.equal(body.price_calendar.every((row) => row.origin_iata === "KUL"), true);
+  assert.equal(body.price_calendar.every((row) => row.destination_iata === "TPE"), true);
+  assert.equal(body.price_calendar.every((row) => row.is_live === false), true);
+  assert.equal(body.price_calendar.every((row) => row.is_bookable_claim === false), true);
+  assert.equal(JSON.stringify(body).includes("rawPayload"), false);
+});
+
+test("local demo calendar page renders cached-fare warnings", async () => {
+  const app = await createScannedDemoApp();
+  const response = await app.handle(new Request("https://demo.test/calendar"));
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /KUL Asia Price Calendar/);
+  assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
+  assert.match(html, /Not guaranteed live/);
+  assert.match(html, /Price may have changed/);
+  assert.match(html, /RM459\.00/);
 });
 
 test("local demo admin scan rejects missing and wrong token", async () => {

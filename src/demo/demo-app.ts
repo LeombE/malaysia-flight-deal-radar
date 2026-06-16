@@ -1,6 +1,8 @@
+import { parseCachedProviderConfig } from "../config/cached-providers.ts";
 import { parseRealProviderConfig } from "../config/real-providers.ts";
+import { createCachedProviderRegistry } from "../providers/cached-registry.ts";
 import { createProviderRegistry } from "../providers/registry.ts";
-import { buildProviderReadinessReports } from "../providers/readiness.ts";
+import { buildCachedProviderReadinessReports, buildProviderReadinessReports } from "../providers/readiness.ts";
 import { handleAppRequest, type AppDependencies, type FlightRadarEnv } from "../routes/app.ts";
 import type { ScanRunResult } from "../scanner/types.ts";
 import { DemoRepository } from "./demo-repository.ts";
@@ -39,19 +41,35 @@ export function createDemoApp(options: DemoAppOptions = {}): DemoApp {
     now: () => Date.parse(state.clock.nowIso),
     sleep: async () => {}
   });
+  const cachedProviders = createCachedProviderRegistry(envVars, {
+    fetch: async () => {
+      throw new Error("Demo app must not make cached provider network calls");
+    },
+    now: () => Date.parse(state.clock.nowIso),
+    sleep: async () => {}
+  });
   const realProviderConfig = parseRealProviderConfig(envVars);
+  const cachedProviderConfig = parseCachedProviderConfig(envVars);
+  const providerReadiness = buildProviderReadinessReports({
+    providers,
+    env: envVars,
+    config: realProviderConfig
+  });
+  providerReadiness.push(...buildCachedProviderReadinessReports({
+    providers: cachedProviders,
+    env: envVars,
+    config: cachedProviderConfig
+  }));
   const dependencies: AppDependencies = {
     apiRepository: repository,
     scanRepository: repository,
     providers,
+    cachedProviders,
     schedulerConfig: demoSchedulerConfig,
     realProviderConfig,
+    cachedProviderConfig,
     providerReadinessEnv: envVars,
-    providerReadiness: buildProviderReadinessReports({
-      providers,
-      env: envVars,
-      config: realProviderConfig
-    }),
+    providerReadiness,
     now: () => new Date(state.clock.nowIso),
     runScan: async () => {
       const result = await runDemoScan(state);

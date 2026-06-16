@@ -78,6 +78,61 @@ export interface PriceHistoryApiRecord {
   revalidated_at: string | null;
 }
 
+export type PriceCalendarFreshnessLabel = "fresh" | "recent" | "cached" | "expired";
+
+export type PriceCalendarSortBy = "price" | "departure_date" | "duration" | "stops";
+
+export type PriceCalendarSortOrder = "asc" | "desc";
+
+export interface PriceCalendarFilters {
+  origin_iata?: string;
+  destination_iata?: string;
+  destination_region?: string;
+  destination_country?: string;
+  departure_from?: string;
+  departure_to?: string;
+  stay_length_days?: number;
+  cabin_class?: "economy";
+  adults?: number;
+  max_stops?: number;
+  freshness?: PriceCalendarFreshnessLabel;
+  include_expired?: boolean;
+  sort_by?: PriceCalendarSortBy;
+  sort_order?: PriceCalendarSortOrder;
+}
+
+export interface PriceCalendarApiRecord {
+  origin_iata: string;
+  destination_iata: string;
+  destination_country: string;
+  destination_region: string;
+  departure_date: string;
+  return_date: string;
+  stay_length_days: number;
+  trip_type: "round_trip";
+  cabin_class: "economy";
+  adults: number;
+  amount_minor_myr: number | null;
+  display_price_rm: string;
+  original_amount: number;
+  original_currency: string;
+  airline_iata: string | null;
+  flight_number: string | null;
+  stops: number | null;
+  total_duration_minutes: number | null;
+  provider_name: string;
+  source_endpoint: string;
+  retrieved_at: string;
+  expires_at: string | null;
+  freshness_label: PriceCalendarFreshnessLabel;
+  is_live: false;
+  is_bookable_claim: false;
+  search_link: string | null;
+  warning: string;
+  deal_label: DealLabel | null;
+  deal_score: number | null;
+}
+
 export interface ProviderLimitApiRecord {
   provider_name: string;
   retention_mode: string;
@@ -104,5 +159,6 @@ export interface ApiRepository {
   listDestinations(filters: DestinationFilters): Promise<AirportApiRecord[]>;
   listDeals(filters: DealFilters, now: Date, freshWithinMinutes: number): Promise<DealApiRecord[]>;
   listPriceHistory(filters: PriceHistoryFilters): Promise<PriceHistoryApiRecord[]>;
+  listPriceCalendar(filters: PriceCalendarFilters, now: Date): Promise<PriceCalendarApiRecord[]>;
   listProviderLimits(): Promise<ProviderLimitApiRecord[]>;
 }

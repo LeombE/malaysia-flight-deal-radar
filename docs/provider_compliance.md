@@ -17,6 +17,7 @@
 - Phase 3 scheduler tests use MockProvider only. Optional real providers, including Amadeus, must be skipped when credentials are absent and must not be expanded during scheduler work.
 - Phase 5 API and dashboard tests use MockProvider or injected test providers only. They must not make real network calls.
 - Real providers must remain disabled by default. Live search is blocked unless `ENABLE_REAL_PROVIDERS=true`, `REAL_PROVIDER_DRY_RUN=false`, required credentials exist, a default provider is selected, and budget/retention/revalidation checks pass.
+- Cached fare providers must also remain disabled by default. Cached search is blocked unless cached-provider guardrails are explicitly opened and credentials are configured.
 - Provider readiness output may show boolean credential status and blocking reason codes, but never secret values, raw credentials, OAuth tokens, or provider payloads.
 - Telegram alerts must be sent only for fresh, revalidated, non-expired fares. Alert messages are normalized summaries, not raw provider payloads.
 - Telegram delivery errors must be sanitized and must never include bot tokens.
@@ -47,3 +48,17 @@ Duffel offers are short-lived. Search results are not display/alert eligible unt
 Default retention mode is `NO_CACHE`. Persist normalized summaries only: route, dates, MYR minor-unit amount, baseline/scoring fields, carrier, stops, duration, expiry, and verification timestamps. Do not persist raw Duffel payloads by default.
 
 Production use requires verified Duffel access terms, display rules, retention behavior, rate limits, and sandbox-to-live promotion controls.
+
+## Travelpayouts / Aviasales Data API
+
+Travelpayouts is implemented as a cached/recently found fare data provider for the KUL Asia Price Calendar. It is disabled unless cached-provider flags are explicitly enabled, dry-run is disabled, the selected cached provider is Travelpayouts, and a token is configured server-side.
+
+Travelpayouts Data API rows must be treated as cached data, not live fares. The UI and API must set `is_live=false`, `is_bookable_claim=false`, and show warnings such as "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed."
+
+Default retention mode is `AGGREGATE_ONLY` or `NO_CACHE`. Persist normalized calendar fields only: route, dates, MYR minor-unit amount when available, original currency/amount, airline, stops, provider, endpoint, retrieved timestamp, expiry, freshness label, safe search link, and warning. Do not persist raw Travelpayouts payloads.
+
+If the API returns a link, store it only as a search/recheck link. If a generic search link is generated, label it clearly and do not claim it preserves the exact fare.
+
+This provider is acceptable for a low-budget MVP because it supports discovery and price-calendar browsing without scraping. It is not acceptable for confirmed availability, booking claims, or alerting as a live fare without a separate recheck step.
+
+Amadeus may later supplement limited live checks, but its low-cost-carrier coverage can be incomplete. Duffel is better suited to controlled offer validation than free broad fare scanning. Skyscanner remains a future partner candidate pending access, terms, retention, rate-limit, and display-rights verification.
