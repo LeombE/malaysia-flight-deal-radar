@@ -1,8 +1,8 @@
 -- Remote mock/demo cleanup for Cloudflare D1.
 -- Safe scope: mock provider scan artifacts and explicitly tagged remote demo seed rows only.
 -- This does not delete real provider rows, non-mock provider rows, or user-created watchlist rows.
-
-BEGIN TRANSACTION;
+-- Cloudflare D1 remote execute rejects SQL transaction control statements.
+-- Keep each statement independently safe and idempotent.
 
 DELETE FROM alerts
 WHERE provider = 'mock'
@@ -41,6 +41,3 @@ SET used_today = 0,
     last_failure_at = NULL,
     updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
 WHERE provider = 'mock';
-
-COMMIT;
-

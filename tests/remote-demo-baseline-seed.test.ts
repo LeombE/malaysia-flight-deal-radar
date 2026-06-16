@@ -127,6 +127,32 @@ test("remote demo cleanup SQL only targets mock/demo rows", () => {
   assert.match(sql, /UPDATE provider_limits[\s\S]*WHERE provider = 'mock';/);
 });
 
+test("remote demo cleanup SQL avoids D1-unsupported transaction statements", () => {
+  const sql = readText(CLEANUP_SQL_PATH);
+
+  assert.equal(/\bBEGIN\s+TRANSACTION\b/i.test(sql), false);
+  assert.equal(/\bCOMMIT\b/i.test(sql), false);
+  assert.equal(/\bSAVEPOINT\b/i.test(sql), false);
+  assert.equal(/\bROLLBACK\b/i.test(sql), false);
+  assert.equal(/\bRELEASE\s+SAVEPOINT\b/i.test(sql), false);
+});
+
+test("remote demo cleanup SQL deletes dependent rows before parent rows", () => {
+  const sql = readText(CLEANUP_SQL_PATH);
+  const alertsDelete = sql.indexOf("DELETE FROM alerts");
+  const dealScoresDelete = sql.indexOf("DELETE FROM deal_scores");
+  const fareChecksDelete = sql.indexOf("DELETE FROM fare_checks");
+  const searchJobsDelete = sql.indexOf("DELETE FROM search_jobs");
+
+  assert.equal(alertsDelete >= 0, true);
+  assert.equal(dealScoresDelete >= 0, true);
+  assert.equal(fareChecksDelete >= 0, true);
+  assert.equal(searchJobsDelete >= 0, true);
+  assert.equal(alertsDelete < dealScoresDelete, true);
+  assert.equal(dealScoresDelete < fareChecksDelete, true);
+  assert.equal(fareChecksDelete < searchJobsDelete, true);
+});
+
 test("remote demo cleanup SQL never targets real provider rows or shared tables", () => {
   const sql = readText(CLEANUP_SQL_PATH);
 
@@ -173,6 +199,18 @@ test("remote demo reset flow docs include cleanup, seed, scan, and verify withou
   assert.match(resetScript, /Read-Host "ADMIN_TOKEN"/);
   assert.equal(/duffel_live_|duffel_test_secret|telegram-secret|amadeus-secret|skyscanner-secret/i.test(docs), false);
   assert.equal(/duffel_live_|duffel_test_secret|telegram-secret|amadeus-secret|skyscanner-secret/i.test(resetScript), false);
+});
+
+test("remote demo reset helper surfaces failed command and stderr by step", () => {
+  const script = readText("scripts/cf-demo-reset-remote.mjs");
+
+  assert.match(script, /Remote demo reset failed during/);
+  assert.match(script, /Failed command:/);
+  assert.match(script, /writeOutput\("stderr", result\.stderr\)/);
+  assert.match(script, /id: "cleanup"/);
+  assert.match(script, /id: "seed"/);
+  assert.match(script, /id: "verify"/);
+  assert.match(script, /Command: \$\{commandText\(step\)\}/);
 });
 
 test("seeded baselines produce dashboard/API-ready median and p10 deal labels", async () => {
