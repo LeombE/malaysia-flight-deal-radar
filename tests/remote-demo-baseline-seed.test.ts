@@ -7,6 +7,7 @@ import type { HistoricalFareSample } from "../src/scoring/types.ts";
 
 const SEED_SQL_PATH = "scripts/sql/remote-demo-baseline-seed.sql";
 const VERIFY_SQL_PATH = "scripts/sql/remote-demo-baseline-verify.sql";
+const CLEANUP_SQL_PATH = "scripts/sql/remote-demo-cleanup.sql";
 const DEMO_NOW = new Date("2026-06-10T08:00:00.000Z");
 const DEMO_DEPARTURE_DATE = "2026-07-25";
 const DEMO_RETURN_DATE = "2026-07-30";
@@ -109,7 +110,69 @@ test("remote demo seed scripts are exposed in package.json", () => {
 
   assert.equal(packageJson.scripts["cf:demo:seed:local"], "npx wrangler d1 execute malaysia-flight-deal-radar --local --file scripts/sql/remote-demo-baseline-seed.sql");
   assert.equal(packageJson.scripts["cf:demo:seed:remote"], "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-baseline-seed.sql");
+  assert.equal(packageJson.scripts["cf:demo:cleanup:remote"], "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-cleanup.sql");
+  assert.equal(packageJson.scripts["cf:demo:reset:remote"], "node scripts/cf-demo-reset-remote.mjs");
   assert.equal(packageJson.scripts["cf:demo:verify:remote"], "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-baseline-verify.sql");
+});
+
+test("remote demo cleanup SQL only targets mock/demo rows", () => {
+  const sql = readText(CLEANUP_SQL_PATH);
+
+  assert.match(sql, /DELETE FROM alerts[\s\S]*provider = 'mock'[\s\S]*provider_name = 'mock'/);
+  assert.match(sql, /DELETE FROM deal_scores[\s\S]*fare_check_id IN[\s\S]*FROM fare_checks[\s\S]*WHERE provider = 'mock'/);
+  assert.match(sql, /DELETE FROM fare_checks\s+WHERE provider = 'mock';/);
+  assert.match(sql, /DELETE FROM fare_snapshots\s+WHERE provider = 'mock';/);
+  assert.match(sql, /DELETE FROM search_jobs[\s\S]*provider = 'mock'[\s\S]*provider_name = 'mock'/);
+  assert.match(sql, /DELETE FROM watchlist\s+WHERE id LIKE 'remote-demo-watchlist-%';/);
+  assert.match(sql, /UPDATE provider_limits[\s\S]*WHERE provider = 'mock';/);
+});
+
+test("remote demo cleanup SQL never targets real provider rows or shared tables", () => {
+  const sql = readText(CLEANUP_SQL_PATH);
+
+  assert.equal(/duffel|amadeus|skyscanner/i.test(sql), false);
+  assert.equal(/DELETE FROM provider_limits/i.test(sql), false);
+  assert.equal(/DELETE FROM route_candidates/i.test(sql), false);
+  assert.equal(/DELETE FROM airports/i.test(sql), false);
+  assert.equal(/DELETE FROM settings/i.test(sql), false);
+  assert.equal(/DELETE FROM watchlist\s*;|DELETE FROM watchlist\s+WHERE\s+active/i.test(sql), false);
+});
+
+test("remote demo verification query checks label counts, provider counts, latest revalidation, and baselines", () => {
+  const sql = readText(VERIFY_SQL_PATH);
+
+  assert.match(sql, /'strong_deal', 2/);
+  assert.match(sql, /'suspected_deal', 2/);
+  assert.match(sql, /'no_deal', 1/);
+  assert.match(sql, /COUNT\(\*\) AS fare_check_count/);
+  assert.match(sql, /MAX\(last_revalidated_at\) AS latest_revalidated_at/);
+  assert.match(sql, /COUNT\(\*\) AS sample_count/);
+  assert.match(sql, /id LIKE 'remote-demo-baseline-%'/);
+});
+
+test("remote demo reset flow docs include cleanup, seed, scan, and verify without secrets", () => {
+  const docs = [
+    readText("README.md"),
+    readText("docs/cloudflare_deployment.md"),
+    readText("docs/deployment_smoke_checklist.md"),
+    readText("docs/local_demo.md")
+  ].join("\n");
+  const resetScript = readText("scripts/cf-demo-reset-remote.mjs");
+
+  assert.match(docs, /cf:demo:cleanup:remote/);
+  assert.match(docs, /cf:demo:seed:remote/);
+  assert.match(docs, /cf:demo:verify:remote/);
+  assert.match(docs, /api\/admin\/scan/);
+  assert.match(docs, /strong_deal`: 2/);
+  assert.match(docs, /suspected_deal`: 2/);
+  assert.match(docs, /no_deal`: at least 1/);
+  assert.match(resetScript, /Remote demo reset finished/);
+  assert.match(resetScript, /remote-demo-cleanup\.sql/);
+  assert.match(resetScript, /remote-demo-baseline-seed\.sql/);
+  assert.match(resetScript, /remote-demo-baseline-verify\.sql/);
+  assert.match(resetScript, /Read-Host "ADMIN_TOKEN"/);
+  assert.equal(/duffel_live_|duffel_test_secret|telegram-secret|amadeus-secret|skyscanner-secret/i.test(docs), false);
+  assert.equal(/duffel_live_|duffel_test_secret|telegram-secret|amadeus-secret|skyscanner-secret/i.test(resetScript), false);
 });
 
 test("seeded baselines produce dashboard/API-ready median and p10 deal labels", async () => {
@@ -155,4 +218,3 @@ test("seeded baselines produce dashboard/API-ready median and p10 deal labels", 
     assert.equal(score.deal_label, expectedLabels.get(routeKey(route)));
   }
 });
-

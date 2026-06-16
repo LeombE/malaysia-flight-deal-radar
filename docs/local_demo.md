@@ -97,6 +97,18 @@ Expected seeded remote demo output:
 
 The remote seed uses `provider = 'mock'`, integer MYR minor units, deterministic IDs, and aggregate snapshots only. It does not call any real provider and does not write secrets or raw provider payloads.
 
+Old remote `no_deal` records can remain visible after repeated mock scans because D1 keeps scan history. To reset only mock/demo rows:
+
+```powershell
+npm run cf:demo:reset:remote
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Start-Process "$base/dashboard"
+```
+
+The cleanup deletes only mock provider scan artifacts and explicitly tagged `remote-demo-watchlist-%` rows. It does not delete real provider rows, non-mock provider rows, or user-created watchlist rows.
+
 To reset the demo state and regenerate records:
 
 ```powershell

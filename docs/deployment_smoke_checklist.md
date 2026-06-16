@@ -79,6 +79,17 @@ Expected after the seeded mock scan:
 - `KUL-SIN` can remain `no_deal`
 - dashboard cards show baseline median and historical p10
 
+If old `no_deal` records from earlier remote mock scans are still visible, reset the mock/demo data only:
+
+```powershell
+npm run cf:demo:reset:remote
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Invoke-RestMethod "$base/api/deals"
+```
+
+The cleanup portion deletes only mock provider scan artifacts and `remote-demo-watchlist-%` rows. It does not delete non-mock provider rows or user-created watchlist rows.
+
 ## Admin Scan Disabled
 
 With no `ADMIN_TOKEN` secret:

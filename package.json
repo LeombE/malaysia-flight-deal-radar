@@ -16,6 +16,8 @@
     "cf:d1:migrate:remote": "npx wrangler d1 migrations apply malaysia-flight-deal-radar --remote",
     "cf:demo:seed:local": "npx wrangler d1 execute malaysia-flight-deal-radar --local --file scripts/sql/remote-demo-baseline-seed.sql",
     "cf:demo:seed:remote": "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-baseline-seed.sql",
+    "cf:demo:cleanup:remote": "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-cleanup.sql",
+    "cf:demo:reset:remote": "node scripts/cf-demo-reset-remote.mjs",
     "cf:demo:verify:remote": "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-baseline-verify.sql",
     "cf:deploy:dry": "npx wrangler deploy --dry-run",
     "cf:deploy": "npx wrangler deploy",

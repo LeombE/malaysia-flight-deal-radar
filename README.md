@@ -194,6 +194,24 @@ Start-Process "$base/dashboard"
 
 The remote demo seed is mock-only and idempotent. It creates 20 historical snapshots for each seeded demo route, adds tagged watchlist rows so the next scan includes those routes, and does not store raw provider payloads or secrets.
 
+If repeated remote scans leave old `no_deal` records visible, reset only the mock/demo rows:
+
+```powershell
+npm run cf:demo:reset:remote
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
+
+Expected remote demo counts after reset plus one admin scan:
+
+- `strong_deal`: 2
+- `suspected_deal`: 2
+- `no_deal`: at least 1
+
+Cleanup deletes only `mock` provider scan artifacts and explicitly tagged `remote-demo-watchlist-%` rows. It does not delete real provider rows, non-mock provider rows, or user-created watchlist rows.
+
 Optional deployment smoke:
 
 ```powershell

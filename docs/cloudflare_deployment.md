@@ -4,6 +4,8 @@ Phase 7B is Cloudflare mock/demo deployment setup only. It prepares Wrangler, D1
 
 Phase 7C adds a remote mock/demo baseline seed for D1. Use it when the deployed dashboard works but `/api/deals` shows only `no_deal` because the remote database has no historical fare snapshots yet.
 
+Phase 7D adds remote mock/demo cleanup and reset tooling. Use it when repeated mock scans leave older `no_deal` records visible and you want a clean demo run without touching future real-provider rows.
+
 ## Worker Shape
 
 - Worker entrypoint: `src/index.ts`
@@ -230,6 +232,58 @@ Expected remote demo labels after the scan:
 - `KUL-SIN`: `no_deal`
 
 If older no-baseline scan results are still visible, the new `strong_deal` and `suspected_deal` records should sort above them by score.
+
+## Remote Demo Cleanup And Reset
+
+Repeated remote mock scans can leave older `no_deal` records in `fare_checks`, `fare_snapshots`, and `deal_scores`. This is expected because the dashboard shows normalized historical scan results, not only the latest run.
+
+To clean only mock/demo rows:
+
+```powershell
+npm run cf:demo:cleanup:remote
+```
+
+Cleanup scope:
+
+- deletes `alerts`, `deal_scores`, `fare_checks`, `fare_snapshots`, and `search_jobs` only where the provider is `mock`
+- deletes only watchlist rows with IDs matching `remote-demo-watchlist-%`
+- resets only the `mock` provider usage/health fields
+- does not delete airports, route candidates, settings, real provider rows, non-mock provider rows, or user-created watchlist rows
+
+To reset the remote demo baselines:
+
+```powershell
+npm run cf:demo:reset:remote
+```
+
+The reset helper runs cleanup, seeds mock historical baselines, runs verification, and then prints the exact admin scan command. It does not request, store, or print `ADMIN_TOKEN`.
+
+Manual reset flow:
+
+```powershell
+npm run cf:demo:cleanup:remote
+npm run cf:demo:seed:remote
+npm run cf:demo:verify:remote
+$base = "https://<your-worker>.<your-subdomain>.workers.dev"
+$adminToken = Read-Host "ADMIN_TOKEN"
+Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
+Invoke-RestMethod "$base/api/deals"
+Start-Process "$base/dashboard"
+```
+
+Expected label counts after reset and one admin scan:
+
+- `strong_deal`: 2
+- `suspected_deal`: 2
+- `no_deal`: at least 1
+
+Keep real providers disabled:
+
+```text
+ENABLE_REAL_PROVIDERS=false
+REAL_PROVIDER_DRY_RUN=true
+DEFAULT_REAL_PROVIDER=
+```
 
 ## Secrets
 
