@@ -58,6 +58,7 @@ test("Cloudflare helper scripts are available without real provider credentials"
   assert.equal(packageJson.scripts["cf:demo:cleanup:remote"], "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-cleanup.sql");
   assert.equal(packageJson.scripts["cf:demo:reset:remote"], "node scripts/cf-demo-reset-remote.mjs");
   assert.equal(packageJson.scripts["cf:demo:verify:remote"], "npx wrangler d1 execute malaysia-flight-deal-radar --remote --file scripts/sql/remote-demo-baseline-verify.sql");
+  assert.equal(packageJson.scripts["cf:demo:report:remote"], "node scripts/cf-demo-report-remote.mjs");
   assert.equal(packageJson.scripts["cf:deploy:dry"], "npx wrangler deploy --dry-run");
   assert.equal(packageJson.scripts["cf:deploy"], "npx wrangler deploy");
 });

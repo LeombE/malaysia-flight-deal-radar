@@ -6,6 +6,8 @@ Phase 7C adds a remote mock/demo baseline seed for D1. Use it when the deployed 
 
 Phase 7D adds remote mock/demo cleanup and reset tooling. Use it when repeated mock scans leave older `no_deal` records visible and you want a clean demo run without touching future real-provider rows.
 
+Phase 7E adds a read-only deployed health snapshot report for portfolio evidence and release notes. It queries public endpoints only and does not require admin or provider credentials.
+
 ## Worker Shape
 
 - Worker entrypoint: `src/index.ts`
@@ -284,6 +286,32 @@ ENABLE_REAL_PROVIDERS=false
 REAL_PROVIDER_DRY_RUN=true
 DEFAULT_REAL_PROVIDER=
 ```
+
+## Deployment Health Snapshot Report
+
+Generate a sanitized Markdown report from the deployed Worker:
+
+```powershell
+npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev"
+```
+
+Write the report to a local file:
+
+```powershell
+npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev" --output "reports/deployment-health-snapshot.md"
+```
+
+The script queries:
+
+- `/health`
+- `/api/provider-health`
+- `/api/deals`
+- `/api/deals?deal_label=strong_deal`
+- `/api/deals?deal_label=suspected_deal`
+
+The output includes health status, provider readiness, deal-label counts, top strong deals, top suspected deals, generated timestamp, and whether real providers are disabled. It does not need `ADMIN_TOKEN` and must not print provider credentials, Telegram tokens, raw provider payloads, bookings, orders, payments, tickets, or passenger identity data.
+
+Use the report as portfolio evidence for the deployed mock/demo state. Keep real providers disabled until partner access, retention terms, rate limits, and display rules are approved.
 
 ## Secrets
 

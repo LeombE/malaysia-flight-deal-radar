@@ -137,6 +137,23 @@ Before considering this smoke complete, verify:
 - no `DUFFEL_ACCESS_TOKEN` is set in Cloudflare for the first mock/demo deployment
 - Skyscanner has not been added
 
+## Portfolio Evidence Report
+
+Generate a sanitized read-only deployment report:
+
+```powershell
+npm run cf:demo:report:remote -- --base-url "$base"
+```
+
+Expected:
+
+- report shows `Health status: ok`
+- report shows `Mock provider healthy: yes`
+- report shows `Real providers disabled: yes`
+- deal-label counts include `strong_deal`, `suspected_deal`, and `no_deal`
+- top strong/suspected rows are mock provider rows
+- no `ADMIN_TOKEN`, Duffel token, Telegram token, raw provider payload, booking, order, payment, ticket, passport, or passenger identity data appears
+
 ## Rollback Switches
 
 If anything looks wrong:

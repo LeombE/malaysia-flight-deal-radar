@@ -212,6 +212,20 @@ Expected remote demo counts after reset plus one admin scan:
 
 Cleanup deletes only `mock` provider scan artifacts and explicitly tagged `remote-demo-watchlist-%` rows. It does not delete real provider rows, non-mock provider rows, or user-created watchlist rows.
 
+Generate a sanitized deployed health snapshot for portfolio or release evidence:
+
+```powershell
+npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev"
+```
+
+Optional file output:
+
+```powershell
+npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev" --output "reports/deployment-health-snapshot.md"
+```
+
+The report uses read-only public endpoints and summarizes health, provider readiness, deal counts, and top strong/suspected mock deals. It does not require `ADMIN_TOKEN`, does not print provider credentials, and should show real providers disabled. A safe mock/example report is committed at `reports/deployment-health-snapshot.example.md`.
+
 Optional deployment smoke:
 
 ```powershell
