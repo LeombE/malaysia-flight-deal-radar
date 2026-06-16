@@ -12,4 +12,6 @@ demo-data/
 logs/
 smoke-output/
 duffel-smoke-output.*
+reports/deployment-health-snapshot.md
+reports/deployment-health-snapshot-*.md
 .DS_Store

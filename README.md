@@ -1,338 +1,271 @@
 # Malaysia Flight Deal Radar
 
-Real-time-ish flight deal radar for Malaysia-based travelers. The system scans round-trip economy fares from Malaysian origins to selected Asia destinations, detects unusually cheap MYR fares, and can alert users after provider revalidation.
+Cloudflare Worker application for monitoring Malaysia-origin round-trip economy fares, scoring likely deals against historical baselines, and presenting a safe demo dashboard/API.
 
-This repository currently contains the provider scaffold, an optional Amadeus fallback scaffold, and a Duffel adapter behind real-provider guardrails. It is not a booking engine and does not store passenger identity, passport data, payment data, checkout state, order state, or ticketing state.
+Live demo: https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/dashboard
 
-## Phase 2 Modules
+## Project Summary
 
-- D1 migrations live in `migrations/`.
-- Airport seed data lives in `src/seeds/airports.ts` and `migrations/0002_seed_airports.sql`.
-- Deal scoring lives in `src/scoring/`.
-- Duplicate alert prevention lives in `src/alerts/duplicate-alerts.ts`.
-- Scheduled scan planning/execution lives in `src/scanner/`.
-- D1 scan persistence helpers live in `src/db/d1-scan-repository.ts`.
-- Telegram alert eligibility, formatting, and sending live in `src/alerts/`.
-- JSON API routes and dashboard rendering live in `src/routes/`.
-- Worker entry points live in `src/index.ts`.
+Malaysia Flight Deal Radar helps Malaysia-based travelers watch routes from `JHB`, `KUL`, and `SZB` to selected Asia destinations. The deployed demo currently uses controlled mock fare data so the full workflow can be inspected without real provider credentials or live fare API calls.
 
-All persisted MYR prices use integer minor units:
+This is not a booking engine. It does not implement checkout, payment, ticket issuance, order creation, passenger identity storage, or passport handling.
 
-- `amount_minor_myr`
-- `baseline_median_minor_myr`
-- `historical_p10_minor_myr`
+## Problem Statement
 
-The scoring engine uses median and p10 baselines instead of average prices because flight fares often contain outliers. A stale provider fare is never treated as a live fare; it must be revalidated before alerting or display. A suspected deal is also not a confirmed airline promotion unless a provider explicitly returns promotion or campaign metadata.
+Flight prices are volatile, noisy, and hard to compare manually. A cheap-looking fare is only useful if it is meaningfully below its own route history, fresh enough to trust, and compliant with provider display/retention rules.
 
-## Scheduler
+This project models that workflow end to end:
 
-Phase 3 adds a cron-ready scan runner. It scans in bounded batches rather than brute-forcing every route so the app can respect partner API budgets, rate limits, and Cloudflare Worker execution limits.
+- collect normalized fare observations
+- calculate route-specific baselines
+- score current offers
+- warn when fare data is stale or expired
+- expose deal cards through a dashboard/API
+- keep real-provider activation behind explicit safety gates
 
-Route priority is deterministic:
+## Target Users And Stakeholders
 
-1. active watchlist routes
-2. routes with previous `strong_deal` or `suspected_deal`
-3. popular seed routes
-4. exploration routes ordered by oldest scan time
+- Malaysia-based travelers watching regional and long-haul Asia routes
+- portfolio reviewers evaluating full-stack/data-system implementation quality
+- future operators who need provider-budget, retention, and stale-fare controls before enabling live providers
+- developers extending the provider registry, scoring logic, or alerting workflow
 
-The scheduler writes search jobs, fare checks, normalized fare snapshots, and deal scores. It attempts provider revalidation before any offer can become alert/display eligible. Phase 4 adds Telegram alert evaluation after scoring; Telegram failures are recorded but do not fail the scan.
+## Verified Deployment Evidence
 
-Amadeus remains optional/fallback only. Duffel is present as a guarded Phase 6B adapter. The scheduler works through the provider registry and skips disabled or dry-run-blocked providers safely.
+Current deployed mock/demo status:
 
-## Telegram Alerts
+- `/health` works
+- `/api/provider-health` works
+- `/api/deals` works
+- `/dashboard` works
+- `strong_deal` count = 2
+- `suspected_deal` count = 2
+- `no_deal` count = 5
+- mock provider is healthy
+- real providers are disabled
+- no secrets are exposed by health/report endpoints
 
-Telegram is disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are configured. Alerts are only sent for fresh, revalidated `suspected_deal` or `strong_deal` results with score `>= 70`, and duplicate alerts are blocked during `ALERT_COOLDOWN_HOURS`.
+Verified highlighted demo rows:
 
-See `docs/telegram_alerts.md` for setup and safety notes.
+- `SZB -> NRT`: `strong_deal`, score 94
+- `KUL -> BKK`: `strong_deal`, score 90
+- `KUL -> TPE`: `suspected_deal`, score 71
+- `JHB -> BKK`: `suspected_deal`, score 70
+- `KUL -> SIN`: `no_deal`, score 0
 
-## Dashboard And API
+Generate a sanitized deployment report:
 
-Phase 5 adds a minimal Cloudflare Worker HTTP surface:
+```powershell
+npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
+```
 
-- `GET /health`
-- `GET /api/origins`
-- `GET /api/destinations`
-- `GET /api/deals`
-- `GET /api/price-history`
-- `GET /api/provider-health`
-- `POST /api/admin/scan`
-- `POST /api/admin/revalidate`
-- `GET /` and `GET /dashboard`
+## Key Features
 
-The dashboard shows origin, region, country, destination, departure date, and stay-length filters. Deal cards include RM price, baseline, discount, last verified time, provider, and stale/expired warnings.
+- Cloudflare Worker dashboard and JSON API
+- D1 schema for airports, route candidates, scan jobs, fare checks, fare snapshots, scores, alerts, provider limits, settings, and watchlist
+- deterministic mock provider for local and deployed demo data
+- provider abstraction with guarded Duffel sandbox adapter and optional Amadeus fallback scaffold
+- median/p10-based deal scoring using integer MYR minor units
+- stale, expired, and revalidation-aware display logic
+- scheduled scan runner with route priority and provider budget controls
+- Telegram alert module with deduplication, currently disabled unless explicitly configured
+- read-only deployment health report for portfolio/release evidence
+- remote demo seed/reset tooling for reproducible dashboard evidence
 
-Phase 5.6 polish adds dashboard filters for deal label and minimum score. Deal cards now separate `Baseline median`, `Historical p10`, `Deal label`, `Provider`, `Last verified`, and `Alert status`.
+## Architecture Overview
 
-Stale or expired cached fares can appear as historical context, but they are never marked as live. `/api/deals?only_recently_verified=true` returns only fresh, recently revalidated results.
+```text
+Cloudflare Worker
+  |-- routes: dashboard, health, APIs, admin scan
+  |-- scheduler: cron/admin scan runner
+  |-- providers: MockProvider, Duffel adapter, Amadeus fallback scaffold
+  |-- scoring: median, p10, discount, quality penalties
+  |-- alerts: eligibility, formatting, duplicate prevention
+  |-- reports: sanitized deployment health snapshot
+  `-- D1: normalized operational and historical tables
+```
 
-Admin endpoints require `Authorization: Bearer <ADMIN_TOKEN>`. If `ADMIN_TOKEN` is missing, admin endpoints are disabled. The revalidate endpoint is a safe authenticated stub in this phase.
+Detailed architecture: `docs/architecture.md`.
 
-See `docs/api.md` and `docs/dashboard.md`.
+## Tech Stack
 
-## Local Runtime
+- TypeScript strict mode
+- Cloudflare Workers
+- Cloudflare D1
+- Wrangler
+- Node.js test runner
+- HTML/CSS dashboard rendered by the Worker
+- MockProvider for deterministic demo data
 
-Use Node.js and npm from Windows PowerShell:
+## Data Flow
+
+1. Route candidates are seeded for Malaysia origins and Asia destinations.
+2. Scheduler prioritizes watchlist routes, previous deal routes, popular seed routes, then exploration routes.
+3. Provider registry selects enabled providers. The deployed demo uses MockProvider only.
+4. Normalized offers are revalidated before alert/display eligibility.
+5. Fare checks and fare snapshots are persisted in D1.
+6. Scoring compares current MYR price against historical median and p10.
+7. Dashboard/API show sorted deal cards with baseline, discount, provider, and freshness warnings.
+8. Optional alert logic evaluates score, freshness, provider display rules, and duplicate cooldown.
+
+## Deal Scoring Methodology
+
+Prices are stored as integer MYR minor units, not floating point. The scoring engine calculates:
+
+- historical median
+- historical p10
+- sample size
+- discount percentage
+- itinerary quality penalties
+- score from 0 to 100
+- deal label
+
+Labels include:
+
+- `no_deal`
+- `watched_price`
+- `suspected_deal`
+- `strong_deal`
+- `urgent_revalidate`
+- `expired`
+
+Median is used instead of average because fare histories often contain outliers. `suspected_deal` means the fare is statistically cheap against observed history; it does not mean the airline has confirmed a promotion.
+
+More detail: `docs/scoring_methodology.md`.
+
+## Safety Design
+
+- real providers disabled by default
+- no scraping of Google Flights, airline sites, OTA sites, login-protected pages, or CAPTCHA-protected pages
+- no booking, order, payment, ticket, passport, or passenger identity storage
+- no raw provider payload persistence by default
+- no stale cached provider result is shown as a live fare
+- provider-derived display/deep-link content requires revalidation
+- secrets stay out of repository files
+- tests use mocked HTTP only
+
+## Provider Readiness Design
+
+The provider registry supports multiple providers but keeps live providers behind guardrails:
+
+- MockProvider is the default demo provider.
+- Duffel sandbox adapter exists and is tested, but is not enabled on Cloudflare.
+- Amadeus remains optional/fallback and disabled without credentials.
+- Skyscanner is intentionally deferred until access and terms are confirmed.
+
+Provider readiness reports show whether a provider is configured, enabled, dry-run blocked, budget blocked, or disabled. Public readiness output must not expose credentials.
+
+More detail: `docs/provider_readiness.md` and `docs/provider_compliance.md`.
+
+## Cloudflare Deployment Notes
+
+The project is deployed as a Cloudflare Worker with D1. Production-like safety defaults keep live providers off and dry-run protected.
+
+Useful commands:
+
+```powershell
+npm run cf:check
+npm run cf:d1:migrate:remote
+npm run cf:demo:verify:remote
+npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
+```
+
+Remote demo maintenance:
+
+```powershell
+npm run cf:demo:reset:remote
+```
+
+After reset, trigger the protected admin scan from your shell with the configured Cloudflare secret value. Do not write that value to repository files.
+
+More detail: `docs/cloudflare_deployment.md`.
+
+## Current Demo Status
+
+The deployed demo is intentionally mock-backed. It demonstrates the full application workflow with controlled fare data:
+
+- Cloudflare Worker is live
+- D1 is connected
+- dashboard and APIs are online
+- remote seed/reset/report tooling works
+- real providers are disabled
+- no live commercial flight coverage is claimed
+
+## Limitations
+
+- deployed demo does not use live commercial flight provider data
+- provider access, rate limits, retention rights, and display rights still need final verification before activation
+- Telegram on Cloudflare is implemented but not the focus of the deployed demo evidence
+- dashboard is intentionally minimal and operational, not a consumer product UI
+- historical baselines are controlled demo data until a real provider is enabled
+
+## Future Roadmap
+
+- Phase 8B: Telegram on Cloudflare
+- Phase 8C: Skyscanner access preparation
+- Phase 8D: real provider activation checklist
+- Phase 9: limited live provider dry run
+- Phase 10: production monitoring
+- Phase 11: GitHub Actions or scheduled report automation
+
+More detail: `docs/roadmap.md`.
+
+## Run Locally
 
 ```powershell
 cd "C:\Users\Admin\OneDrive\Documents\flight API real time"
 npm install
-npm run typecheck --if-present
-npm test --if-present
-```
-
-Create deterministic demo data and run one MockProvider scan:
-
-```powershell
 npm run seed
 npm run demo:scan
-```
-
-Start the local demo server:
-
-```powershell
 npm run dev
 ```
 
-Stop the local server with `Ctrl+C` in the PowerShell window running `npm run dev`.
-
-Open the dashboard:
+Open:
 
 ```powershell
 Start-Process "http://localhost:8787/dashboard"
 ```
 
-Verify JSON endpoints:
+## Run Tests
 
 ```powershell
-Invoke-RestMethod "http://localhost:8787/health"
-Invoke-RestMethod "http://localhost:8787/api/deals"
+npm run typecheck --if-present
+npm test --if-present
+npm run cf:check
 ```
 
-Check provider readiness without making network calls:
-
-```powershell
-npm run provider:check
-```
-
-Expected local URLs:
-
-- dashboard: `http://localhost:8787/dashboard`
-- health: `http://localhost:8787/health`
-- deals API: `http://localhost:8787/api/deals`
-- provider health: `http://localhost:8787/api/provider-health`
-
-The deterministic demo scan should produce `strong_deal`, `suspected_deal`, and `no_deal` records. Dashboard cards show `Freshly verified`, `Stale / needs revalidation`, or `Expired` when applicable.
-
-To reset and rerun demo data:
-
-```powershell
-npm run seed
-npm run demo:scan
-```
-
-`npm run seed` writes `demo-data/demo-state.json`. The `demo-data/` directory is ignored by Git and should not be committed.
-
-The local demo uses deterministic `MockProvider` data only. It does not require Amadeus, Skyscanner, Duffel, Telegram, or any real provider credentials.
-
-## Local Admin Scan
-
-If `ADMIN_TOKEN` is missing, `POST /api/admin/scan` is disabled:
-
-```powershell
-Invoke-RestMethod -Method Post "http://localhost:8787/api/admin/scan"
-```
-
-To enable it locally, copy `.dev.vars.example` to `.dev.vars`, set a placeholder local token, restart `npm run dev`, then call:
-
-```powershell
-Copy-Item ".dev.vars.example" ".dev.vars"
-(Get-Content ".dev.vars") -replace '^ADMIN_TOKEN=.*', 'ADMIN_TOKEN=local-demo-token' | Set-Content ".dev.vars"
-Invoke-RestMethod -Method Post "http://localhost:8787/api/admin/scan" -Headers @{ Authorization = "Bearer local-demo-token" }
-```
-
-Never commit `.dev.vars` or real secrets.
-
-## Cloudflare D1 Setup
-
-`npm run dev` uses the in-memory/JSON demo path. For Cloudflare Worker and D1 setup, copy the example Wrangler config, create D1, apply migrations, and verify the tables:
+## Deploy Safely
 
 ```powershell
 npm run cf:check
 Copy-Item "wrangler.toml.example" "wrangler.toml"
 npm run cf:d1:create:note
-npx wrangler d1 create malaysia-flight-deal-radar
-npm run cf:d1:migrate:local
 npm run cf:d1:migrate:remote
-npx wrangler d1 execute malaysia-flight-deal-radar --local --command "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-npm run cf:dev
-```
-
-Update your uncommitted `wrangler.toml` with the database IDs returned by Wrangler. The D1 binding is `DB`, and migrations include the airport/route seed data.
-
-Local smoke checks with Wrangler:
-
-```powershell
-$base = "http://localhost:8787"
-Invoke-RestMethod "$base/health"
-Invoke-RestMethod "$base/api/provider-health"
-Invoke-RestMethod "$base/api/deals"
-Start-Process "$base/dashboard"
-Invoke-RestMethod "http://localhost:8787/cdn-cgi/handler/scheduled?format=json"
-```
-
-Remote D1 needs demo historical baselines before mock scan results can classify as `strong_deal` or `suspected_deal`. If the deployed dashboard initially shows only `no_deal`, run:
-
-```powershell
-npm run cf:demo:seed:remote
-npm run cf:demo:verify:remote
-$base = "https://<your-worker>.<your-subdomain>.workers.dev"
-$adminToken = Read-Host "ADMIN_TOKEN"
-Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
-Invoke-RestMethod "$base/api/deals"
-Start-Process "$base/dashboard"
-```
-
-The remote demo seed is mock-only and idempotent. It creates 20 historical snapshots for each seeded demo route, adds tagged watchlist rows so the next scan includes those routes, and does not store raw provider payloads or secrets.
-
-If repeated remote scans leave old `no_deal` records visible, reset only the mock/demo rows:
-
-```powershell
-npm run cf:demo:reset:remote
-$adminToken = Read-Host "ADMIN_TOKEN"
-Invoke-RestMethod -Method Post "$base/api/admin/scan" -Headers @{ Authorization = "Bearer $adminToken" }
-Invoke-RestMethod "$base/api/deals"
-Start-Process "$base/dashboard"
-```
-
-Expected remote demo counts after reset plus one admin scan:
-
-- `strong_deal`: 2
-- `suspected_deal`: 2
-- `no_deal`: at least 1
-
-Cleanup deletes only `mock` provider scan artifacts and explicitly tagged `remote-demo-watchlist-%` rows. It does not delete real provider rows, non-mock provider rows, or user-created watchlist rows.
-
-Generate a sanitized deployed health snapshot for portfolio or release evidence:
-
-```powershell
-npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev"
-```
-
-Optional file output:
-
-```powershell
-npm run cf:demo:report:remote -- --base-url "https://<your-worker>.<your-subdomain>.workers.dev" --output "reports/deployment-health-snapshot.md"
-```
-
-The report uses read-only public endpoints and summarizes health, provider readiness, deal counts, and top strong/suspected mock deals. It does not require `ADMIN_TOKEN`, does not print provider credentials, and should show real providers disabled. A safe mock/example report is committed at `reports/deployment-health-snapshot.example.md`.
-
-Optional deployment smoke:
-
-```powershell
-npm run check
 npm run cf:deploy:dry
 npm run cf:deploy
-$base = "https://<your-worker>.<your-subdomain>.workers.dev"
-Invoke-RestMethod "$base/health"
-Invoke-RestMethod "$base/api/provider-health"
-Invoke-RestMethod "$base/api/deals"
-Start-Process "$base/dashboard"
 ```
 
-## Environment
+Keep local Cloudflare IDs in uncommitted `wrangler.toml`. Keep secrets in Cloudflare secret storage, not repo files.
 
-Copy `.dev.vars.example` to `.dev.vars` for local development. Never commit real secrets.
+## Keep Real Providers Disabled
 
-For Cloudflare deployments, do not put secrets in `wrangler.toml`. For the first mock/demo deployment, do not set `DUFFEL_ACCESS_TOKEN` in Cloudflare yet. Set only the secrets you are ready to use:
-
-```powershell
-npx wrangler secret put ADMIN_TOKEN
-npx wrangler secret put TELEGRAM_BOT_TOKEN
-npx wrangler secret put TELEGRAM_CHAT_ID
-```
-
-Future provider secrets remain server-side only:
-
-```powershell
-npx wrangler secret put DUFFEL_ACCESS_TOKEN
-npx wrangler secret put AMADEUS_CLIENT_ID
-npx wrangler secret put AMADEUS_CLIENT_SECRET
-npx wrangler secret put SKYSCANNER_API_KEY
-```
-
-Production safety defaults should remain:
+For the deployed demo, keep real-provider activation off:
 
 ```text
 ENABLE_REAL_PROVIDERS=false
 REAL_PROVIDER_DRY_RUN=true
 DEFAULT_REAL_PROVIDER=
-MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1
-MAX_REAL_PROVIDER_DAILY_BUDGET=1
-TELEGRAM_DRY_RUN=true
 ```
 
-Duffel and Amadeus are optional. Amadeus is disabled unless both `AMADEUS_CLIENT_ID` and `AMADEUS_CLIENT_SECRET` are present. Duffel is disabled unless `DUFFEL_ACCESS_TOKEN` is present and every real-provider guardrail allows it.
+Do not configure live/sandbox Duffel or Amadeus on Cloudflare until the real-provider activation checklist is complete. Do not add Skyscanner until access and terms are confirmed.
 
-Duffel test tokens beginning with `duffel_test_` are reported as `test_mode=true` in provider readiness output. Token values are never returned by health APIs and must not be logged.
+## Supporting Docs
 
-Real providers are also blocked by Phase 6A guardrails unless all of these are true:
-
-- `ENABLE_REAL_PROVIDERS=true`
-- `REAL_PROVIDER_DRY_RUN=false`
-- `DEFAULT_REAL_PROVIDER` names the provider
-- required provider credentials are configured
-- provider budget remains available
-- retention, currency, and revalidation checks pass
-
-Check safe readiness output with:
-
-```powershell
-Invoke-RestMethod "http://localhost:8787/api/provider-health"
-```
-
-MockProvider remains the default local/demo provider. Readiness output shows booleans and reason codes only; it must not expose secrets.
-
-To intentionally test Duffel with mocked-safe local readiness, copy `.dev.vars.example` to `.dev.vars`, add a placeholder or real test token locally, keep dry-run enabled, and inspect provider health:
-
-```powershell
-Copy-Item ".dev.vars.example" ".dev.vars"
-(Get-Content ".dev.vars") -replace '^DUFFEL_ACCESS_TOKEN=.*', 'DUFFEL_ACCESS_TOKEN=duffel_test_placeholder' | Set-Content ".dev.vars"
-npm run dev
-Invoke-RestMethod "http://localhost:8787/api/provider-health"
-```
-
-Keep `REAL_PROVIDER_DRY_RUN=true` until you intentionally want the Worker to call Duffel. The current adapter searches and retrieves offers only; it does not create orders, book flights, collect passenger identity, process payment, ticket flights, or implement checkout.
-
-For one controlled Duffel sandbox smoke test, use a test token only and tiny quota:
-
-```powershell
-Copy-Item ".dev.vars.example" ".dev.vars"
-(Get-Content ".dev.vars") -replace '^DUFFEL_ACCESS_TOKEN=.*', 'DUFFEL_ACCESS_TOKEN=duffel_test_your_local_token' | Set-Content ".dev.vars"
-(Get-Content ".dev.vars") -replace '^ENABLE_REAL_PROVIDERS=.*', 'ENABLE_REAL_PROVIDERS=true' | Set-Content ".dev.vars"
-(Get-Content ".dev.vars") -replace '^REAL_PROVIDER_DRY_RUN=.*', 'REAL_PROVIDER_DRY_RUN=false' | Set-Content ".dev.vars"
-(Get-Content ".dev.vars") -replace '^DEFAULT_REAL_PROVIDER=.*', 'DEFAULT_REAL_PROVIDER=duffel' | Set-Content ".dev.vars"
-(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_SEARCHES_PER_RUN=.*', 'MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1' | Set-Content ".dev.vars"
-(Get-Content ".dev.vars") -replace '^MAX_REAL_PROVIDER_DAILY_BUDGET=.*', 'MAX_REAL_PROVIDER_DAILY_BUDGET=1' | Set-Content ".dev.vars"
-npm run provider:check
-npm run duffel:smoke -- --origin KUL --destination SIN --departure-date 2026-09-01 --return-date 2026-09-06
-```
-
-If `KUL-SIN` returns `offers_returned=0`, treat that as a successful API call with no sandbox inventory, not a credential failure. To try the Duffel Airways sandbox profile instead:
-
-```powershell
-npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --return-date 2026-09-06
-```
-
-Optional smoke env vars are `DUFFEL_SMOKE_ORIGIN`, `DUFFEL_SMOKE_DESTINATION`, `DUFFEL_SMOKE_DEPARTURE_DATE`, `DUFFEL_SMOKE_RETURN_DATE`, `DUFFEL_SMOKE_CABIN_CLASS`, `DUFFEL_SMOKE_ADULTS`, and `DUFFEL_SMOKE_CURRENCY`.
-
-If any guard is missing, `npm run duffel:smoke` prints blocking reasons and makes no Duffel call. After the smoke test, set `REAL_PROVIDER_DRY_RUN=true` again. Skyscanner remains deferred until partner API access and display/retention rules are confirmed.
-
-More detail:
-
-- `docs/local_demo.md`
+- `docs/architecture.md`
+- `docs/screenshots.md`
+- `docs/resume_project_summary.md`
+- `docs/roadmap.md`
 - `docs/cloudflare_deployment.md`
 - `docs/deployment_smoke_checklist.md`
-- `docs/deployment_readiness.md`
 - `docs/provider_readiness.md`
-- `docs/provider_selection.md`
-- `docs/providers/duffel.md`
+- `docs/provider_compliance.md`
