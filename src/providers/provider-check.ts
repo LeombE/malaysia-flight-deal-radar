@@ -20,13 +20,15 @@ export interface ProviderCheckRecord {
 }
 
 export interface ProviderCheckLastSmoke {
-  status: "blocked" | "failed" | "succeeded" | "no_offers_returned";
-  offers_returned: number | null;
+  status: "blocked" | "failed" | "succeeded" | "no_offers_returned" | "no_rows_returned";
+  offers_returned?: number | null;
+  rows_returned?: number | null;
   checked_at: string;
   origin: string;
   destination: string;
   departure_date: string;
   return_date: string;
+  endpoint?: string;
 }
 
 export function buildProviderCheckReport(input: {
@@ -112,7 +114,11 @@ export function formatProviderCheckReport(records: readonly ProviderCheckRecord[
       const route = record.last_smoke.origin && record.last_smoke.destination
         ? `${record.last_smoke.origin}-${record.last_smoke.destination} ${record.last_smoke.departure_date} to ${record.last_smoke.return_date}`
         : "unknown route";
-      lines.push(`  last_smoke: ${record.last_smoke.status}, offers_returned=${record.last_smoke.offers_returned ?? "unknown"}, checked_at=${record.last_smoke.checked_at}, route=${route}`);
+      const returned = record.last_smoke.rows_returned !== undefined
+        ? `rows_returned=${record.last_smoke.rows_returned ?? "unknown"}`
+        : `offers_returned=${record.last_smoke.offers_returned ?? "unknown"}`;
+      const endpoint = record.last_smoke.endpoint ? `, endpoint=${record.last_smoke.endpoint}` : "";
+      lines.push(`  last_smoke: ${record.last_smoke.status}, ${returned}, checked_at=${record.last_smoke.checked_at}, route=${route}${endpoint}`);
     } else {
       lines.push("  last_smoke: none");
     }

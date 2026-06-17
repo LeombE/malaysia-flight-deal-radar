@@ -4,14 +4,16 @@ import { resolve } from "node:path";
 import { projectRoot, readDevVars } from "./demo-utils.mjs";
 
 async function readLastSmokeRecords() {
-  try {
-    const text = await readFile(resolve(projectRoot, "smoke-output", "duffel-last-smoke.json"), "utf8");
-    const record = JSON.parse(text);
-    return [record];
-  } catch (error) {
-    if (error && error.code !== "ENOENT") throw error;
-    return [];
+  const records = [];
+  for (const fileName of ["duffel-last-smoke.json", "travelpayouts-last-smoke.json"]) {
+    try {
+      const text = await readFile(resolve(projectRoot, "smoke-output", fileName), "utf8");
+      records.push(JSON.parse(text));
+    } catch (error) {
+      if (error && error.code !== "ENOENT") throw error;
+    }
   }
+  return records;
 }
 
 const env = await readDevVars();

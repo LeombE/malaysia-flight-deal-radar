@@ -220,9 +220,10 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 ## Future Roadmap
 
 - Phase 8B: Travelpayouts cached fare provider and KUL Asia Price Calendar
-- Phase 8C: Telegram on Cloudflare
-- Phase 8D: Skyscanner access preparation
-- Phase 8E: real provider activation checklist
+- Phase 8C: safe local Travelpayouts cached-fare smoke tooling
+- Phase 8D: Telegram on Cloudflare verification
+- Phase 8E: Skyscanner access preparation
+- Phase 8F: real provider activation checklist
 - Phase 9: limited live provider dry run
 - Phase 10: production monitoring
 - Phase 11: GitHub Actions or scheduled report automation
@@ -288,6 +289,24 @@ DEFAULT_CACHED_PROVIDER=travelpayouts
 ```
 
 Do not store a real Travelpayouts token in repository files.
+
+## Local Travelpayouts Smoke
+
+Travelpayouts is a cached/recently found fare source, not a live fare guarantee. Keep it disabled on Cloudflare. For a local one-request smoke only:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+# Edit .dev.vars locally:
+# TRAVELPAYOUTS_TOKEN=<your local token>
+# ENABLE_CACHED_FARE_PROVIDER=true
+# CACHED_PROVIDER_DRY_RUN=false
+# DEFAULT_CACHED_PROVIDER=travelpayouts
+# TRAVELPAYOUTS_SMOKE_LIMIT=5
+npm run travelpayouts:check
+npm run travelpayouts:smoke -- --origin KUL --destination TPE --departure-date 2026-09-01 --return-date 2026-09-06 --endpoint latest --limit 5
+```
+
+After the smoke test, set `CACHED_PROVIDER_DRY_RUN=true` again. The smoke output is sanitized and must not be treated as confirmed live/bookable fare coverage.
 
 ## Supporting Docs
 

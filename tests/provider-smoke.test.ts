@@ -2,10 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildProviderCheckReport, formatProviderCheckReport } from "../src/providers/provider-check.ts";
 import { resolveDuffelSmokeInput, runDuffelSmoke } from "../src/providers/duffel/smoke.ts";
+import {
+  resolveTravelpayoutsSmokeInput,
+  runTravelpayoutsSmoke,
+  travelpayoutsSmokeStatusFromResult
+} from "../src/providers/travelpayouts/smoke.ts";
 
 const NOW = Date.parse("2026-06-11T08:00:00.000Z");
 const TEST_TOKEN = "duffel_test_secret_token";
 const LIVE_TOKEN = "duffel_live_secret_token";
+const TRAVELPAYOUTS_TOKEN = "travelpayouts_secret_token";
 
 function safeEnv(overrides: Record<string, string | undefined> = {}): Record<string, string | undefined> {
   return {
@@ -82,6 +88,49 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" }
   });
+}
+
+function travelpayoutsEnv(overrides: Record<string, string | undefined> = {}): Record<string, string | undefined> {
+  return {
+    ENABLE_CACHED_FARE_PROVIDER: "true",
+    CACHED_PROVIDER_DRY_RUN: "false",
+    DEFAULT_CACHED_PROVIDER: "travelpayouts",
+    TRAVELPAYOUTS_TOKEN,
+    TRAVELPAYOUTS_API_BASE_URL: "https://api.travelpayouts.test",
+    TRAVELPAYOUTS_CURRENCY: "MYR",
+    TRAVELPAYOUTS_RETENTION_MODE: "AGGREGATE_ONLY",
+    TRAVELPAYOUTS_TIMEOUT_MS: "10000",
+    TRAVELPAYOUTS_RETRY_LIMIT: "0",
+    ...overrides
+  };
+}
+
+function travelpayoutsRoute() {
+  return {
+    originIata: "KUL",
+    destinationIata: "TPE",
+    departureDate: "2026-09-01",
+    returnDate: "2026-09-06"
+  };
+}
+
+function travelpayoutsPayload(overrides: Record<string, unknown> = {}): unknown {
+  return {
+    success: true,
+    error: null,
+    data: [{
+      origin: "KUL",
+      destination: "TPE",
+      depart_date: "2026-09-01",
+      return_date: "2026-09-06",
+      value: 459,
+      airline: "D7",
+      number_of_changes: 0,
+      found_at: "2026-06-11T07:30:00.000Z",
+      raw_marker: "raw-travelpayouts-payload",
+      ...overrides
+    }]
+  };
 }
 
 test("smoke route env vars override defaults", () => {
@@ -323,4 +372,229 @@ test("duffel smoke guard failures avoid real network calls", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.blockingReasons.length >= 3, true);
   assert.equal(calls, 0);
+});
+
+test("Travelpayouts smoke route env vars override defaults", () => {
+  const input = resolveTravelpayoutsSmokeInput(undefined, {
+    TRAVELPAYOUTS_SMOKE_ORIGIN: "szb",
+    TRAVELPAYOUTS_SMOKE_DESTINATION: "bkk",
+    TRAVELPAYOUTS_SMOKE_DEPARTURE_DATE: "2026-10-01",
+    TRAVELPAYOUTS_SMOKE_RETURN_DATE: "2026-10-06",
+    TRAVELPAYOUTS_SMOKE_ENDPOINT: "month-matrix",
+    TRAVELPAYOUTS_SMOKE_CURRENCY: "myr",
+    TRAVELPAYOUTS_SMOKE_LIMIT: "7"
+  }, NOW);
+
+  assert.deepEqual(input, {
+    originIata: "SZB",
+    destinationIata: "BKK",
+    departureDate: "2026-10-01",
+    returnDate: "2026-10-06",
+    endpoint: "v2/prices/month-matrix",
+    currency: "MYR",
+    limit: 7
+  });
+});
+
+test("Travelpayouts smoke refuses when cached provider is disabled and makes no network call", async () => {
+  let calls = 0;
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv({ ENABLE_CACHED_FARE_PROVIDER: "false" }),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      calls += 1;
+      throw new Error("network should not be called");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blockingReasons.includes("cached_provider_disabled"), true);
+  assert.match(result.output, /No Travelpayouts network call was made/);
+  assert.equal(calls, 0);
+});
+
+test("Travelpayouts smoke refuses when dry-run is enabled", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv({ CACHED_PROVIDER_DRY_RUN: "true" }),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      throw new Error("network should not be called");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blockingReasons.includes("dry_run_enabled"), true);
+});
+
+test("Travelpayouts smoke refuses missing token", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv({ TRAVELPAYOUTS_TOKEN: "" }),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      throw new Error("network should not be called");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blockingReasons.includes("credentials_missing"), true);
+  assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+});
+
+test("Travelpayouts smoke refuses when default cached provider is not Travelpayouts", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv({ DEFAULT_CACHED_PROVIDER: "other" }),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      throw new Error("network should not be called");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blockingReasons.includes("provider_not_selected"), true);
+});
+
+test("Travelpayouts smoke refuses unsafe limits and unsupported endpoints", async () => {
+  let calls = 0;
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: {
+      ...travelpayoutsRoute(),
+      endpoint: "v2/prices/unknown",
+      limit: 50
+    },
+    now: () => NOW,
+    fetch: async () => {
+      calls += 1;
+      throw new Error("network should not be called");
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.blockingReasons.includes("unsafe_limit"), true);
+  assert.equal(result.blockingReasons.includes("unsupported_endpoint"), true);
+  assert.equal(calls, 0);
+});
+
+test("Travelpayouts smoke normalizes mocked response and does not expose token or raw payload", async () => {
+  let capturedUrl = "";
+  let capturedToken = "";
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async (url, init) => {
+      capturedUrl = String(url);
+      capturedToken = new Headers(init?.headers).get("x-access-token") ?? "";
+      return jsonResponse(travelpayoutsPayload());
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary?.rows_returned, 1);
+  assert.equal(result.summary?.price_myr, "RM459.00");
+  assert.equal(result.summary?.original_currency, "MYR");
+  assert.equal(result.summary?.carrier, "D7");
+  assert.equal(result.summary?.stops, 0);
+  assert.equal(result.summary?.freshness_label, "fresh");
+  assert.match(result.summary?.cache_warning ?? "", /Recheck before purchase/);
+  assert.match(capturedUrl, /\/v2\/prices\/latest/);
+  assert.match(capturedUrl, /origin=KUL/);
+  assert.match(capturedUrl, /destination=TPE/);
+  assert.match(capturedUrl, /limit=5/);
+  assert.equal(capturedUrl.includes(TRAVELPAYOUTS_TOKEN), false);
+  assert.equal(capturedToken, TRAVELPAYOUTS_TOKEN);
+  assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+  assert.equal(result.output.includes("x-access-token"), false);
+  assert.equal(result.output.includes("raw-travelpayouts-payload"), false);
+});
+
+test("Travelpayouts smoke labels cached and expired fares correctly", async () => {
+  const cached = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => jsonResponse(travelpayoutsPayload({
+      found_at: "2026-05-01T00:00:00.000Z"
+    }))
+  });
+  const expired = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => jsonResponse(travelpayoutsPayload({
+      found_at: "2026-05-01T00:00:00.000Z",
+      expires_at: "2026-06-01T00:00:00.000Z"
+    }))
+  });
+
+  assert.equal(cached.summary?.freshness_label, "cached");
+  assert.equal(expired.summary?.freshness_label, "expired");
+  assert.equal(cached.summary?.readiness_status.live_guarantee, false);
+  assert.equal(expired.summary?.readiness_status.cached_data_source, true);
+});
+
+test("Travelpayouts smoke treats zero rows as successful cached-data miss", async () => {
+  let calls = 0;
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => {
+      calls += 1;
+      return jsonResponse({ success: true, error: null, data: [] });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.exitCode, 0);
+  assert.equal(calls, 1);
+  assert.equal(result.summary?.rows_returned, 0);
+  assert.equal(result.summary?.no_rows_returned, true);
+  assert.match(result.output, /API call succeeded/);
+  assert.match(result.output, /No cached fare rows returned/);
+  assert.match(result.output, /not a credential failure/);
+});
+
+test("Travelpayouts smoke failure output is sanitized", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => jsonResponse({
+      success: false,
+      error: `bad token ${TRAVELPAYOUTS_TOKEN}`,
+      data: []
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+  assert.equal(result.output.includes("bad token"), false);
+  assert.match(result.output, /Travelpayouts smoke failed/);
+});
+
+test("provider check includes Travelpayouts last smoke rows without exposing secrets", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => jsonResponse({ success: true, error: null, data: [] })
+  });
+  const records = buildProviderCheckReport({
+    env: travelpayoutsEnv(),
+    lastSmoke: [travelpayoutsSmokeStatusFromResult(result, "2026-06-11T08:05:00.000Z")],
+    now: () => NOW
+  });
+  const output = formatProviderCheckReport(records);
+
+  assert.match(output, /travelpayouts/);
+  assert.match(output, /cached_data_source: true/);
+  assert.match(output, /live_guarantee: false/);
+  assert.match(output, /can_search_cached: true/);
+  assert.match(output, /last_smoke: no_rows_returned, rows_returned=0/);
+  assert.equal(output.includes(TRAVELPAYOUTS_TOKEN), false);
 });

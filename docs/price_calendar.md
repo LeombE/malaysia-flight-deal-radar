@@ -58,6 +58,16 @@ Travelpayouts Data API rows are cached/recently found data. The application stor
 
 Expired rows are hidden by default unless explicitly requested with `include_expired=true`.
 
+## Travelpayouts Smoke Workflow
+
+`npm run travelpayouts:check` reports whether the cached provider is configured, enabled, dry-run blocked, and able to search cached data. It does not make a network call.
+
+`npm run travelpayouts:smoke` is a local-only optional check. It can make one low-limit request to Travelpayouts only after all safety gates are opened in `.dev.vars`. A successful smoke response means the API call and normalization path worked; it does not prove the fare is live, bookable, or still available.
+
+If the smoke returns zero rows, treat it as a cached-data route/date availability result, not a credential failure. Try another future window or endpoint, then recheck before purchase.
+
+Keep the deployed Cloudflare demo on controlled calendar rows until Travelpayouts access, retention behavior, quota limits, and display rules are manually verified.
+
 ## Demo Routes
 
 The controlled demo includes KUL rows for:

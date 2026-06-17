@@ -22,6 +22,53 @@ Travelpayouts is disabled unless all are true:
 
 Default deployment values keep it disabled.
 
+## Local Smoke Check
+
+Use Travelpayouts only for a controlled local cached-fare smoke. Do not add the token to Cloudflare yet.
+
+Get a token from your Travelpayouts / Aviasales partner account, then keep it only in local `.dev.vars`:
+
+```powershell
+Copy-Item ".dev.vars.example" ".dev.vars"
+```
+
+Edit `.dev.vars` locally:
+
+```text
+TRAVELPAYOUTS_TOKEN=<local token only>
+ENABLE_CACHED_FARE_PROVIDER=true
+CACHED_PROVIDER_DRY_RUN=false
+DEFAULT_CACHED_PROVIDER=travelpayouts
+TRAVELPAYOUTS_SMOKE_ORIGIN=KUL
+TRAVELPAYOUTS_SMOKE_DESTINATION=TPE
+TRAVELPAYOUTS_SMOKE_ENDPOINT=v2/prices/latest
+TRAVELPAYOUTS_SMOKE_CURRENCY=MYR
+TRAVELPAYOUTS_SMOKE_LIMIT=5
+```
+
+Check readiness without network access:
+
+```powershell
+npm run travelpayouts:check
+```
+
+Run at most one low-limit cached request:
+
+```powershell
+npm run travelpayouts:smoke -- --origin KUL --destination TPE --departure-date 2026-09-01 --return-date 2026-09-06 --endpoint latest --limit 5
+```
+
+The smoke command refuses to run unless cached provider support is enabled, dry-run is off, Travelpayouts is selected, a token is present, and the request limit stays low. It prints only normalized summary fields and never prints the token, request headers, or raw provider payload.
+
+After the smoke test, restore:
+
+```text
+CACHED_PROVIDER_DRY_RUN=true
+ENABLE_CACHED_FARE_PROVIDER=false
+```
+
+Cloudflare deployment should keep Travelpayouts disabled until the cached-provider behavior and partner terms have been manually verified.
+
 ## Data Semantics
 
 Travelpayouts Data API results are cached/recently found fares. They are useful for low-budget discovery and calendar browsing, but they are not guaranteed live or bookable.

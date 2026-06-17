@@ -8,6 +8,8 @@
     "seed": "node scripts/demo-seed.mjs",
     "demo:scan": "node scripts/demo-scan.mjs",
     "provider:check": "node scripts/provider-check.mjs",
+    "travelpayouts:check": "node scripts/travelpayouts-check.mjs",
+    "travelpayouts:smoke": "node scripts/travelpayouts-smoke.mjs",
     "duffel:smoke": "node scripts/duffel-smoke.mjs",
     "cf:check": "node scripts/cf-check.mjs",
     "cf:dev": "npx wrangler dev",
