@@ -1,4 +1,4 @@
-﻿# Travelpayouts / Aviasales Cached Fare Provider
+# Travelpayouts / Aviasales Cached Fare Provider
 
 Travelpayouts is used as a cached fare data provider for the KUL Asia Price Calendar. It is not a live availability provider in this project.
 
@@ -22,7 +22,7 @@ The provider sends the token in the `x-access-token` header. Tokens must stay se
 
 ## Not Used In This Phase
 
-The Travelpayouts real-time Flight Search API is separate from the cached Data API and is not used in Phase 8C. Do not add marker/signature search, booking, order, payment, ticketing, passenger identity, or passport storage.
+The Travelpayouts real-time Flight Search API is separate from the cached Data API and is not used in Phase 8C or Phase 8D. Do not add marker/signature search, booking, order, payment, ticketing, passenger identity, or passport storage.
 
 ## Enablement Gates
 
@@ -103,6 +103,71 @@ ENABLE_CACHED_FARE_PROVIDER=false
 
 Cloudflare deployment should keep Travelpayouts disabled until the cached-provider behavior and partner terms have been manually verified.
 
+
+## Local D1 Import Workflow
+
+Phase 8D adds a local-only import command for cached Data API rows. It is intended for local verification of the calendar path, not Cloudflare activation.
+
+The import command refuses to run unless:
+
+- cached fare provider support is enabled
+- cached provider dry-run is off
+- `DEFAULT_CACHED_PROVIDER=travelpayouts`
+- `TRAVELPAYOUTS_TOKEN` is present locally
+- `TRAVELPAYOUTS_RETENTION_MODE=AGGREGATE_ONLY`
+- target is local
+- currency is `MYR`
+- endpoint is `latest`, `month-matrix`, or `week-matrix`
+- destination is one of `BKK`, `TPE`, `DPS`, or `SIN`
+- limit is between 1 and 10
+
+Default import route:
+
+```text
+KUL -> BKK
+endpoint=week-matrix
+currency=MYR
+depart-date=2026-08-17
+return-date=2026-08-22
+trip-duration=5
+limit=5
+```
+
+Dry-run preview:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import true
+```
+
+Local D1 import:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import false
+npm run travelpayouts:import:verify:local
+```
+
+The command writes a temporary SQL file under ignored `smoke-output/` and executes:
+
+```powershell
+npx wrangler d1 execute malaysia-flight-deal-radar --local --file <temp.sql>
+```
+
+The generated SQL upserts only normalized `price_calendar_rows` fields. It forces:
+
+- `provider_name='travelpayouts'`
+- `is_live=0`
+- `is_bookable_claim=0`
+- `retention_mode='AGGREGATE_ONLY'`
+- cached/recheck warning text
+
+The deterministic import ID excludes `retrieved_at`. The stable dedupe key is provider, endpoint, route, dates, stay length, MYR amount, original currency, carrier, flight number, and stops. On conflict, only mutable fields such as `retrieved_at`, `expires_at`, `freshness_label`, `warning`, `search_link`, and `updated_at` are refreshed.
+
+Do not add `TRAVELPAYOUTS_TOKEN` to Cloudflare for this workflow. After local import, restore:
+
+```text
+CACHED_PROVIDER_DRY_RUN=true
+ENABLE_CACHED_FARE_PROVIDER=false
+```
 ## Data Semantics
 
 Travelpayouts Data API results are cached/recently found fares. They are useful for low-budget discovery and calendar browsing, but they are not guaranteed live or bookable.

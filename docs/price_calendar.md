@@ -1,4 +1,4 @@
-﻿# KUL Asia Price Calendar
+# KUL Asia Price Calendar
 
 The price calendar is a low-budget discovery surface for Malaysia-based travelers starting from `KUL` to selected Asia destinations. It is separate from the deal-scoring dashboard.
 
@@ -70,6 +70,36 @@ If the smoke returns zero rows, treat it as a cached-data route/date availabilit
 
 Keep the deployed Cloudflare demo on controlled calendar rows until Travelpayouts access, retention behavior, quota limits, and display rules are manually verified.
 
+
+## Local Travelpayouts Import
+
+`npm run travelpayouts:import:local` can pull a low-limit cached Data API response and upsert normalized rows into local D1 `price_calendar_rows`. It is local-only in Phase 8D.
+
+Use a dry-run first:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import true
+```
+
+Then import locally:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import false
+npm run travelpayouts:import:verify:local
+```
+
+The import does not create a remote Cloudflare path and does not write raw payloads. It stores rows as cached discovery data with `is_live=0`, `is_bookable_claim=0`, and `retention_mode='AGGREGATE_ONLY'`.
+
+Repeated imports are idempotent for the same logical fare candidate. The stable key excludes `retrieved_at`; a changed retrieved timestamp updates freshness-related fields instead of creating duplicate rows.
+
+After importing, open:
+
+```powershell
+Start-Process "http://localhost:8787/calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+Start-Process "http://localhost:8787/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+```
+
+Cloudflare remains disabled for Travelpayouts in this phase. Keep the token only in local `.dev.vars` and restore dry-run after testing.
 ## Demo Routes
 
 The controlled demo includes KUL rows for:
@@ -83,4 +113,3 @@ The controlled demo includes KUL rows for:
 - `CAN`
 
 These rows exist to demonstrate sorting, filters, warning labels, and cached-fare semantics without requiring real provider credentials.
-

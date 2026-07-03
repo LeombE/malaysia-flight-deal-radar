@@ -227,6 +227,10 @@ const priceCalendar: PriceCalendarApiRecord[] = [
 ];
 
 class MemoryApiRepository implements ApiRepository {
+  private readonly calendarRows: PriceCalendarApiRecord[];
+  constructor(calendarRows: PriceCalendarApiRecord[] = priceCalendar) {
+    this.calendarRows = calendarRows;
+  }
   lastDestinationFilters: DestinationFilters | null = null;
   lastDealFilters: DealFilters | null = null;
   lastPriceHistoryFilters: PriceHistoryFilters | null = null;
@@ -289,7 +293,7 @@ class MemoryApiRepository implements ApiRepository {
 
   async listPriceCalendar(filters: PriceCalendarFilters): Promise<PriceCalendarApiRecord[]> {
     this.lastPriceCalendarFilters = filters;
-    return priceCalendar
+    return this.calendarRows
       .filter((item) => {
         if (filters.origin_iata && item.origin_iata !== filters.origin_iata) return false;
         if (filters.destination_iata && item.destination_iata !== filters.destination_iata) return false;
@@ -447,6 +451,37 @@ test("GET /api/price-calendar applies region filter and sorts by price", async (
   assert.deepEqual(body.price_calendar.map((row) => row.destination_iata), ["BKK"]);
 });
 
+
+test("GET /api/price-calendar and /calendar can render imported Travelpayouts rows", async () => {
+  const imported: PriceCalendarApiRecord = {
+    ...priceCalendar[1]!,
+    provider_name: "travelpayouts",
+    source_endpoint: "v2/prices/week-matrix",
+    retrieved_at: "2026-06-10T07:30:00.000Z",
+    warning: "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed."
+  };
+  const repository = new MemoryApiRepository([imported]);
+  const { request } = app({ repository });
+
+  const api = await request("/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia");
+  const body = await json<{ price_calendar: PriceCalendarApiRecord[] }>(api);
+
+  assert.equal(api.status, 200);
+  assert.equal(body.price_calendar.length, 1);
+  assert.equal(body.price_calendar[0]?.provider_name, "travelpayouts");
+  assert.equal(body.price_calendar[0]?.is_live, false);
+  assert.equal(body.price_calendar[0]?.is_bookable_claim, false);
+  assert.equal(JSON.stringify(body).includes("raw"), false);
+
+  const page = await request("/calendar?destination_iata=BKK&destination_region=Southeast%20Asia");
+  const html = await page.text();
+
+  assert.equal(page.status, 200);
+  assert.match(html, /travelpayouts/);
+  assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
+  assert.match(html, /Generic links may not preserve this fare\./);
+  assert.equal(html.includes("rawPayload"), false);
+});
 test("GET /api/provider-health includes Amadeus as disabled when credentials are missing", async () => {
   const { request } = app();
   const response = await request("/api/provider-health");

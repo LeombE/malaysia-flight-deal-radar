@@ -1,4 +1,4 @@
-﻿import type { TravelpayoutsConfig } from "../../config/travelpayouts.ts";
+import type { TravelpayoutsConfig } from "../../config/travelpayouts.ts";
 import type { PriceCalendarSearchInput } from "../cached-types.ts";
 
 export type TravelpayoutsEndpoint =
@@ -32,7 +32,7 @@ function appendRouteParams(url: URL, config: TravelpayoutsConfig, input: PriceCa
 export function buildLatestUrl(config: TravelpayoutsConfig, input: PriceCalendarSearchInput): string {
   const url = baseUrl(config, "v2/prices/latest");
   appendRouteParams(url, config, input);
-  url.searchParams.set("period_type", "month");
+  url.searchParams.set("period_type", input.periodType ?? "month");
   url.searchParams.set("page", "1");
   url.searchParams.set("limit", String(clampLimit(input.limit)));
   url.searchParams.set("sorting", "price");

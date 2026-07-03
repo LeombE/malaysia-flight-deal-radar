@@ -10,6 +10,8 @@
     "provider:check": "node scripts/provider-check.mjs",
     "travelpayouts:check": "node scripts/travelpayouts-check.mjs",
     "travelpayouts:smoke": "node scripts/travelpayouts-smoke.mjs",
+    "travelpayouts:import:local": "node scripts/travelpayouts-import-local.mjs",
+    "travelpayouts:import:verify:local": "node scripts/travelpayouts-import-verify-local.mjs",
     "duffel:smoke": "node scripts/duffel-smoke.mjs",
     "cf:check": "node scripts/cf-check.mjs",
     "cf:dev": "npx wrangler dev",

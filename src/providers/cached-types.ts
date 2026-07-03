@@ -12,6 +12,7 @@ export interface PriceCalendarSearchInput {
   adults?: number;
   cabinClass?: "economy";
   limit?: number;
+  periodType?: "year" | "month";
 }
 
 export interface CachedFareProvider {

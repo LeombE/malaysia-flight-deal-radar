@@ -1,4 +1,4 @@
-﻿# Malaysia Flight Deal Radar
+# Malaysia Flight Deal Radar
 
 Cloudflare Worker application for monitoring Malaysia-origin round-trip economy fares, scoring likely deals against historical baselines, and presenting a safe KUL Asia cached price calendar.
 
@@ -221,7 +221,7 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 
 - Phase 8B: Travelpayouts cached fare provider and KUL Asia Price Calendar
 - Phase 8C: safe local Travelpayouts cached-fare smoke tooling
-- Phase 8D: Telegram on Cloudflare verification
+- Phase 8D: local Travelpayouts cached-fare import into local D1
 - Phase 8E: Skyscanner access preparation
 - Phase 8F: real provider activation checklist
 - Phase 9: limited live provider dry run
@@ -313,6 +313,66 @@ npm run travelpayouts:smoke -- --origin KUL --destination TPE --endpoint latest 
 
 After the smoke test, set `CACHED_PROVIDER_DRY_RUN=true` again. The smoke output is sanitized and must not be treated as confirmed live/bookable fare coverage.
 
+
+## Local Travelpayouts Import Into Local D1
+
+Phase 8D adds a local-only import path for cached Travelpayouts rows. It writes normalized discovery rows into local D1 `price_calendar_rows` so `/api/price-calendar` and `/calendar` can show `provider_name=travelpayouts` rows through the same UI/API path.
+
+This import is not deployed to Cloudflare and does not configure a Cloudflare Travelpayouts token.
+
+Before import, keep the token only in local `.dev.vars`:
+
+```text
+TRAVELPAYOUTS_TOKEN=<local token only>
+ENABLE_CACHED_FARE_PROVIDER=true
+CACHED_PROVIDER_DRY_RUN=false
+DEFAULT_CACHED_PROVIDER=travelpayouts
+TRAVELPAYOUTS_RETENTION_MODE=AGGREGATE_ONLY
+```
+
+Prepare local D1:
+
+```powershell
+npm run cf:d1:migrate:local
+```
+
+Preview the normalized rows without writing D1:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import true
+```
+
+Run the local import only when the preview looks safe:
+
+```powershell
+npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --destination BKK --currency MYR --depart-date 2026-08-17 --return-date 2026-08-22 --trip-duration 5 --limit 5 --dry-run-import false
+npm run travelpayouts:import:verify:local
+```
+
+Then verify in the local app:
+
+```powershell
+npm run dev
+Start-Process "http://localhost:8787/calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+Start-Process "http://localhost:8787/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+```
+
+After import, restore safe local settings:
+
+```text
+CACHED_PROVIDER_DRY_RUN=true
+ENABLE_CACHED_FARE_PROVIDER=false
+```
+
+Import safety details:
+
+- target is forced to local; there is no remote/preview import script in this phase
+- request limit is capped at 10
+- allowed import destinations are `BKK`, `TPE`, `DPS`, and `SIN`
+- rows are stored as normalized calendar discovery data only
+- `is_live=0` and `is_bookable_claim=0` are always written
+- raw provider payloads, request headers, and tokens are not written to SQL or output
+- deterministic import IDs exclude `retrieved_at`; repeated imports update mutable freshness/link/timestamp fields instead of duplicating the same fare candidate
 ## Supporting Docs
 
 - `docs/architecture.md`
@@ -325,4 +385,3 @@ After the smoke test, set `CACHED_PROVIDER_DRY_RUN=true` again. The smoke output
 - `docs/provider_compliance.md`
 - `docs/price_calendar.md`
 - `docs/providers/travelpayouts.md`
-
