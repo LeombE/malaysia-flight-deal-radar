@@ -1,4 +1,4 @@
-# Malaysia Flight Deal Radar
+﻿# Malaysia Flight Deal Radar
 
 Cloudflare Worker application for monitoring Malaysia-origin round-trip economy fares, scoring likely deals against historical baselines, and presenting a safe KUL Asia cached price calendar.
 
@@ -301,9 +301,14 @@ Copy-Item ".dev.vars.example" ".dev.vars"
 # ENABLE_CACHED_FARE_PROVIDER=true
 # CACHED_PROVIDER_DRY_RUN=false
 # DEFAULT_CACHED_PROVIDER=travelpayouts
+# TRAVELPAYOUTS_SMOKE_ENDPOINT=latest
+# TRAVELPAYOUTS_SMOKE_DEPARTURE_AT=2026-09
+# TRAVELPAYOUTS_SMOKE_DEPART_DATE=2026-09-01
+# TRAVELPAYOUTS_SMOKE_RETURN_DATE=2026-09-06
+# TRAVELPAYOUTS_SMOKE_TRIP_DURATION=5
 # TRAVELPAYOUTS_SMOKE_LIMIT=5
 npm run travelpayouts:check
-npm run travelpayouts:smoke -- --origin KUL --destination TPE --departure-date 2026-09-01 --return-date 2026-09-06 --endpoint latest --limit 5
+npm run travelpayouts:smoke -- --origin KUL --destination TPE --endpoint latest --departure-at 2026-09 --depart-date 2026-09-01 --return-date 2026-09-06 --trip-duration 5 --limit 5
 ```
 
 After the smoke test, set `CACHED_PROVIDER_DRY_RUN=true` again. The smoke output is sanitized and must not be treated as confirmed live/bookable fare coverage.
@@ -320,3 +325,4 @@ After the smoke test, set `CACHED_PROVIDER_DRY_RUN=true` again. The smoke output
 - `docs/provider_compliance.md`
 - `docs/price_calendar.md`
 - `docs/providers/travelpayouts.md`
+

@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+﻿import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { runTravelpayoutsSmoke, travelpayoutsSmokeStatusFromResult } from "../src/providers/travelpayouts/smoke.ts";
 import { projectRoot, readDevVars } from "./demo-utils.mjs";
@@ -11,8 +11,11 @@ function parseArgs(argv) {
     if (!key?.startsWith("--") || value === undefined || value.startsWith("--")) continue;
     if (key === "--origin") input.originIata = value;
     if (key === "--destination") input.destinationIata = value;
+    if (key === "--departure-at") input.departureAt = value;
+    if (key === "--depart-date") input.departDate = value;
     if (key === "--departure-date") input.departureDate = value;
     if (key === "--return-date") input.returnDate = value;
+    if (key === "--trip-duration") input.tripDuration = Number.parseInt(value, 10);
     if (key === "--endpoint") input.endpoint = value;
     if (key === "--currency") input.currency = value;
     if (key === "--limit") input.limit = Number.parseInt(value, 10);

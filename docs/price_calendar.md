@@ -1,4 +1,4 @@
-# KUL Asia Price Calendar
+﻿# KUL Asia Price Calendar
 
 The price calendar is a low-budget discovery surface for Malaysia-based travelers starting from `KUL` to selected Asia destinations. It is separate from the deal-scoring dashboard.
 
@@ -62,9 +62,11 @@ Expired rows are hidden by default unless explicitly requested with `include_exp
 
 `npm run travelpayouts:check` reports whether the cached provider is configured, enabled, dry-run blocked, and able to search cached data. It does not make a network call.
 
-`npm run travelpayouts:smoke` is a local-only optional check. It can make one low-limit request to Travelpayouts only after all safety gates are opened in `.dev.vars`. A successful smoke response means the API call and normalization path worked; it does not prove the fare is live, bookable, or still available.
+`npm run travelpayouts:smoke` is a local-only optional check. It can make one low-limit request to Travelpayouts only after all safety gates are opened in `.dev.vars`. A successful smoke response means the cached Data API call and normalization path worked; it does not prove the fare is live, bookable, or still available.
 
-If the smoke returns zero rows, treat it as a cached-data route/date availability result, not a credential failure. Try another future window or endpoint, then recheck before purchase.
+The smoke command supports endpoint-specific request shapes for `latest`, `month-matrix`, `week-matrix`, and `v3-prices-for-dates`. It prints safe query keys so request-shape debugging can happen without printing tokens, request headers, or raw provider payloads.
+
+If the smoke returns zero rows, treat it as a cached-data route/date availability result, not a credential failure. If it returns HTTP 400, treat it as `request_shape_error`; adjust endpoint/date parameters rather than rotating credentials. HTTP 401/403 means credential/access issue.
 
 Keep the deployed Cloudflare demo on controlled calendar rows until Travelpayouts access, retention behavior, quota limits, and display rules are manually verified.
 
@@ -81,3 +83,4 @@ The controlled demo includes KUL rows for:
 - `CAN`
 
 These rows exist to demonstrate sorting, filters, warning labels, and cached-fare semantics without requiring real provider credentials.
+

@@ -1,4 +1,4 @@
-# Phase 5.5 local demo placeholders only. Leave secrets blank unless testing locally.
+﻿# Phase 5.5 local demo placeholders only. Leave secrets blank unless testing locally.
 
 # Optional Amadeus fallback provider. Leave blank to keep disabled.
 AMADEUS_CLIENT_ID=
@@ -39,7 +39,7 @@ REAL_PROVIDER_TIMEOUT_MS=10000
 REAL_PROVIDER_RETRY_LIMIT=2
 REVALIDATE_BEFORE_DISPLAY_MINUTES=15
 
-# Phase 8B cached fare provider. Leave token blank and dry-run enabled by default.
+# Phase 8B/8C cached fare provider. Leave token blank and dry-run enabled by default.
 TRAVELPAYOUTS_TOKEN=
 TRAVELPAYOUTS_API_BASE_URL=https://api.travelpayouts.com
 TRAVELPAYOUTS_CURRENCY=MYR
@@ -48,8 +48,11 @@ TRAVELPAYOUTS_TIMEOUT_MS=10000
 TRAVELPAYOUTS_RETRY_LIMIT=1
 TRAVELPAYOUTS_SMOKE_ORIGIN=KUL
 TRAVELPAYOUTS_SMOKE_DESTINATION=TPE
+TRAVELPAYOUTS_SMOKE_DEPARTURE_AT=
+TRAVELPAYOUTS_SMOKE_DEPART_DATE=
 TRAVELPAYOUTS_SMOKE_DEPARTURE_DATE=
 TRAVELPAYOUTS_SMOKE_RETURN_DATE=
+TRAVELPAYOUTS_SMOKE_TRIP_DURATION=5
 TRAVELPAYOUTS_SMOKE_ENDPOINT=v2/prices/latest
 TRAVELPAYOUTS_SMOKE_CURRENCY=MYR
 TRAVELPAYOUTS_SMOKE_LIMIT=5

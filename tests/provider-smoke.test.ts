@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { buildProviderCheckReport, formatProviderCheckReport } from "../src/providers/provider-check.ts";
 import { resolveDuffelSmokeInput, runDuffelSmoke } from "../src/providers/duffel/smoke.ts";
@@ -109,8 +109,10 @@ function travelpayoutsRoute() {
   return {
     originIata: "KUL",
     destinationIata: "TPE",
-    departureDate: "2026-09-01",
-    returnDate: "2026-09-06"
+    departureAt: "2026-09-01",
+    departDate: "2026-09-01",
+    returnDate: "2026-09-06",
+    tripDuration: 5
   };
 }
 
@@ -388,11 +390,13 @@ test("Travelpayouts smoke route env vars override defaults", () => {
   assert.deepEqual(input, {
     originIata: "SZB",
     destinationIata: "BKK",
-    departureDate: "2026-10-01",
+    departureAt: "2026-10-01",
+    departDate: "2026-10-01",
     returnDate: "2026-10-06",
     endpoint: "v2/prices/month-matrix",
     currency: "MYR",
-    limit: 7
+    limit: 7,
+    tripDuration: 5
   });
 });
 
@@ -597,4 +601,78 @@ test("provider check includes Travelpayouts last smoke rows without exposing sec
   assert.match(output, /can_search_cached: true/);
   assert.match(output, /last_smoke: no_rows_returned, rows_returned=0/);
   assert.equal(output.includes(TRAVELPAYOUTS_TOKEN), false);
+});
+
+
+test("Travelpayouts smoke classifies HTTP 400 as request_shape_error, not credential failure", async () => {
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: travelpayoutsRoute(),
+    now: () => NOW,
+    fetch: async () => jsonResponse({ success: false, error: `bad ${TRAVELPAYOUTS_TOKEN}`, data: null }, 400)
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errorClassification, "request_shape_error");
+  assert.match(result.output, /Error classification: request_shape_error/);
+  assert.equal(result.output.includes("credential"), false);
+  assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+});
+
+test("Travelpayouts smoke classifies HTTP 401 and 403 as credential or access issue", async () => {
+  for (const status of [401, 403]) {
+    const result = await runTravelpayoutsSmoke({
+      env: travelpayoutsEnv(),
+      input: travelpayoutsRoute(),
+      now: () => NOW,
+      fetch: async () => jsonResponse({ success: false, error: "auth", data: null }, status)
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.errorClassification, "credential_or_access_issue");
+    assert.match(result.output, /Error classification: credential_or_access_issue/);
+    assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+  }
+});
+
+test("Travelpayouts smoke supports v3 prices for dates with safe query keys", async () => {
+  let capturedUrl = "";
+  const result = await runTravelpayoutsSmoke({
+    env: travelpayoutsEnv(),
+    input: {
+      ...travelpayoutsRoute(),
+      endpoint: "v3-prices-for-dates",
+      departureAt: "2026-09",
+      departDate: "2026-09-01",
+      limit: 5
+    },
+    now: () => NOW,
+    fetch: async (url) => {
+      capturedUrl = String(url);
+      return jsonResponse(travelpayoutsPayload({
+        departure_at: "2026-09-01T08:00:00Z",
+        return_at: "2026-09-06T18:00:00Z",
+        price: 459
+      }));
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.match(capturedUrl, /\/aviasales\/v3\/prices_for_dates/);
+  assert.match(capturedUrl, /departure_at=2026-09/);
+  assert.match(capturedUrl, /return_at=2026-09-06/);
+  assert.deepEqual(result.summary?.safe_query_keys, [
+    "currency",
+    "departure_at",
+    "destination",
+    "direct",
+    "limit",
+    "one_way",
+    "origin",
+    "page",
+    "return_at",
+    "sorting"
+  ]);
+  assert.equal(result.output.includes(TRAVELPAYOUTS_TOKEN), false);
+  assert.equal(result.output.includes("raw-travelpayouts-payload"), false);
 });

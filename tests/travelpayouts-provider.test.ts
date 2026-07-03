@@ -1,10 +1,11 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { parseCachedProviderConfig } from "../src/config/cached-providers.ts";
 import { parseTravelpayoutsConfig } from "../src/config/travelpayouts.ts";
 import { createCachedProviderRegistry } from "../src/providers/cached-registry.ts";
 import { buildProviderCheckReport, formatProviderCheckReport } from "../src/providers/provider-check.ts";
 import { buildCachedProviderReadinessReports } from "../src/providers/readiness.ts";
+import { buildTravelpayoutsUrl, safeQueryKeysForUrl } from "../src/providers/travelpayouts/request-builder.ts";
 import { TravelpayoutsProvider } from "../src/providers/travelpayouts/travelpayouts-provider.ts";
 import type { PriceCalendarApiRecord } from "../src/routes/api-types.ts";
 
@@ -257,4 +258,78 @@ test("Travelpayouts normalized rows do not expose raw provider payload", async (
 
   assert.equal(serialized.includes("secret_raw_field"), false);
   assert.equal(serialized.includes("raw-value"), false);
+});
+
+test("Travelpayouts endpoint-specific builders avoid unsupported cached API params", () => {
+  const config = parseTravelpayoutsConfig(env());
+  const input = {
+    ...searchInput(),
+    departureFrom: "2026-09-01",
+    returnFrom: "2026-09-06",
+    stayLengthDays: 5,
+    limit: 5
+  };
+
+  const latest = new URL(buildTravelpayoutsUrl(config, "v2/prices/latest", input));
+  assert.deepEqual(safeQueryKeysForUrl(latest.toString()), [
+    "beginning_of_period",
+    "currency",
+    "destination",
+    "limit",
+    "one_way",
+    "origin",
+    "page",
+    "period_type",
+    "show_to_affiliates",
+    "sorting",
+    "trip_class",
+    "trip_duration"
+  ]);
+  assert.equal(latest.searchParams.get("beginning_of_period"), "2026-09-01");
+  assert.equal(latest.searchParams.has("length"), false);
+
+  const month = new URL(buildTravelpayoutsUrl(config, "v2/prices/month-matrix", input));
+  assert.deepEqual(safeQueryKeysForUrl(month.toString()), [
+    "currency",
+    "destination",
+    "month",
+    "origin",
+    "show_to_affiliates"
+  ]);
+  assert.equal(month.searchParams.get("month"), "2026-09-01");
+  assert.equal(month.searchParams.has("limit"), false);
+  assert.equal(month.searchParams.has("trip_class"), false);
+  assert.equal(month.searchParams.has("one_way"), false);
+
+  const week = new URL(buildTravelpayoutsUrl(config, "v2/prices/week-matrix", input));
+  assert.deepEqual(safeQueryKeysForUrl(week.toString()), [
+    "currency",
+    "depart_date",
+    "destination",
+    "origin",
+    "return_date",
+    "show_to_affiliates"
+  ]);
+  assert.equal(week.searchParams.get("depart_date"), "2026-09-01");
+  assert.equal(week.searchParams.get("return_date"), "2026-09-06");
+  assert.equal(week.searchParams.has("limit"), false);
+  assert.equal(week.searchParams.has("trip_duration"), false);
+
+  const v3 = new URL(buildTravelpayoutsUrl(config, "aviasales/v3/prices_for_dates", input));
+  assert.deepEqual(safeQueryKeysForUrl(v3.toString()), [
+    "currency",
+    "departure_at",
+    "destination",
+    "direct",
+    "limit",
+    "one_way",
+    "origin",
+    "page",
+    "return_at",
+    "sorting"
+  ]);
+  assert.equal(v3.searchParams.get("departure_at"), "2026-09-01");
+  assert.equal(v3.searchParams.get("return_at"), "2026-09-06");
+  assert.equal(v3.searchParams.has("show_to_affiliates"), false);
+  assert.equal(v3.searchParams.has("trip_duration"), false);
 });

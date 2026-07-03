@@ -1,4 +1,4 @@
-import type { CachedProviderConfig } from "../../config/cached-providers.ts";
+﻿import type { CachedProviderConfig } from "../../config/cached-providers.ts";
 import type { TravelpayoutsConfig } from "../../config/travelpayouts.ts";
 import { isTravelpayoutsEnabled } from "../../config/travelpayouts.ts";
 import type { CachedFareProvider, PriceCalendarSearchInput } from "../cached-types.ts";
@@ -6,7 +6,7 @@ import type { ProviderHealth, ProviderRetentionMode } from "../types.ts";
 import { TravelpayoutsProviderError } from "./errors.ts";
 import { TravelpayoutsHttpClient } from "./http-client.ts";
 import { normalizeTravelpayoutsRows } from "./normalize.ts";
-import { buildLatestUrl, buildMonthMatrixUrl, buildWeekMatrixUrl, type TravelpayoutsEndpoint } from "./request-builder.ts";
+import { buildTravelpayoutsUrl, type TravelpayoutsEndpoint } from "./request-builder.ts";
 import { parseTravelpayoutsResponse } from "./schemas.ts";
 import type { PriceCalendarApiRecord } from "../../routes/api-types.ts";
 
@@ -63,25 +63,28 @@ export class TravelpayoutsProvider implements CachedFareProvider {
   }
 
   searchLatest(input: PriceCalendarSearchInput): Promise<PriceCalendarApiRecord[]> {
-    return this.search("v2/prices/latest", buildLatestUrl(this.config, input), input);
+    return this.search("v2/prices/latest", input);
   }
 
   searchMonthMatrix(input: PriceCalendarSearchInput): Promise<PriceCalendarApiRecord[]> {
-    return this.search("v2/prices/month-matrix", buildMonthMatrixUrl(this.config, input), input);
+    return this.search("v2/prices/month-matrix", input);
   }
 
   searchWeekMatrix(input: PriceCalendarSearchInput): Promise<PriceCalendarApiRecord[]> {
-    return this.search("v2/prices/week-matrix", buildWeekMatrixUrl(this.config, input), input);
+    return this.search("v2/prices/week-matrix", input);
+  }
+
+  searchV3PricesForDates(input: PriceCalendarSearchInput): Promise<PriceCalendarApiRecord[]> {
+    return this.search("aviasales/v3/prices_for_dates", input);
   }
 
   private async search(
     endpoint: TravelpayoutsEndpoint,
-    url: string,
     input: PriceCalendarSearchInput
   ): Promise<PriceCalendarApiRecord[]> {
     if (!this.isEnabled()) return [];
     try {
-      const response = await this.client.requestJson(url, endpoint);
+      const response = await this.client.requestJson(buildTravelpayoutsUrl(this.config, endpoint, input), endpoint);
       const parsed = parseTravelpayoutsResponse(response);
       const rows = normalizeTravelpayoutsRows({
         rows: parsed.data,
@@ -122,6 +125,9 @@ export class TravelpayoutsProvider implements CachedFareProvider {
   }
 
   private healthFromError(error: TravelpayoutsProviderError, context: string): ProviderHealth {
+    if (error.status === 400) {
+      return this.buildHealth("degraded", `${context} request shape error`);
+    }
     if (error.status === 429) {
       const health = this.buildHealth("rate_limited", `${context} rate limited`);
       if (error.retryAfterMs !== undefined) health.retryAfterMs = error.retryAfterMs;
