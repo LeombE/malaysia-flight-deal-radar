@@ -292,6 +292,35 @@ test("Travelpayouts import latest endpoint supports period_type without unsuppor
   ]);
 });
 
+
+test("Travelpayouts real import calls D1 executor only after gates pass", async () => {
+  let blockedD1Calls = 0;
+  const blocked = await runTravelpayoutsImportLocal({
+    env: env({ ENABLE_CACHED_FARE_PROVIDER: "false" }),
+    now: () => NOW,
+    fetch: async () => {
+      throw new Error("network must not be called before gates pass");
+    },
+    executeSql: async () => {
+      blockedD1Calls += 1;
+    }
+  });
+
+  let allowedD1Calls = 0;
+  const allowed = await runTravelpayoutsImportLocal({
+    env: env(),
+    now: () => NOW,
+    fetch: async () => jsonResponse(payload()),
+    executeSql: async () => {
+      allowedD1Calls += 1;
+    }
+  });
+
+  assert.equal(blocked.ok, false);
+  assert.equal(blockedD1Calls, 0);
+  assert.equal(allowed.ok, true);
+  assert.equal(allowedD1Calls, 1);
+});
 test("Travelpayouts import verification SQL is read-only and checks raw payload column absence", () => {
   const sql = buildTravelpayoutsImportVerifySql();
 
