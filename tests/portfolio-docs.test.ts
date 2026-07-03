@@ -12,6 +12,14 @@ const portfolioDocs = [
   "reports/deployment-health-snapshot.example.md"
 ];
 
+const providerDecisionDocs = [
+  "docs/provider_selection.md",
+  "docs/provider_readiness.md",
+  "docs/provider_compliance.md",
+  "docs/real_provider_activation_checklist.md",
+  "docs/providers/skyscanner.md"
+];
+
 function readText(path: string): string {
   return readFileSync(path, "utf8");
 }
@@ -109,6 +117,60 @@ test("roadmap includes required future phases without enabling real providers no
     assert.match(roadmap, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(roadmap, /current online demo uses controlled mock fare data/i);
+  assert.match(roadmap, /documentation-only: no adapter, credential, Cloudflare secret, smoke command, or live API call/i);
+});
+
+test("Phase 8G Skyscanner docs prepare access without adding an implementation", () => {
+  const skyscanner = readText("docs/providers/skyscanner.md");
+  const combined = providerDecisionDocs.map(readText).join("\n");
+
+  for (const required of [
+    "Skyscanner Provider Access Preparation",
+    "Phase 8G is documentation-only",
+    "No Skyscanner adapter exists",
+    "No Skyscanner API call is made",
+    "official partner/API path",
+    "Default retention remains `NO_CACHE`",
+    "Do not add environment variable names",
+    "real provider activation checklist"
+  ]) {
+    assert.match(skyscanner, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  }
+
+  assert.match(combined, /skyscanner.*not implemented/i);
+  for (const required of ["official access", "terms", "retention", "rate-limit", "display"]) {
+    assert.match(combined, new RegExp(required, "i"));
+  }
+  assert.match(combined, /mock-only/i);
+  assert.equal(/Skyscanner (?:is|was) enabled/i.test(combined), false);
+  assert.equal(/Skyscanner (?:is|was) configured/i.test(combined), false);
+  assert.equal(/DEFAULT_REAL_PROVIDER=skyscanner/i.test(combined), false);
+  assert.equal(/bookable inventory (?:is|was) (?:enabled|available|provided)/i.test(combined), false);
+});
+
+test("real provider activation checklist keeps enablement separate from documentation", () => {
+  const checklist = readText("docs/real_provider_activation_checklist.md");
+
+  for (const required of [
+    "Real Provider Activation Checklist",
+    "does not enable a provider by itself",
+    "ENABLE_REAL_PROVIDERS=false",
+    "REAL_PROVIDER_DRY_RUN=true",
+    "DEFAULT_REAL_PROVIDER=",
+    "ENABLE_CACHED_FARE_PROVIDER=false",
+    "CACHED_PROVIDER_DRY_RUN=true",
+    "Provider Terms",
+    "Technical Gates",
+    "Data Contract",
+    "Provider-Specific Status",
+    "`skyscanner` | Documentation-only future candidate"
+  ]) {
+    assert.match(checklist, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  assert.match(checklist, /Do not store passenger identity, passport data, payment details/i);
+  assert.match(checklist, /raw provider payloads, tokens, authorization headers, or secret values/i);
+  assert.equal(/wrangler secret put/i.test(checklist), false);
 });
 
 test("repository hygiene keeps private local artifacts out of git", () => {

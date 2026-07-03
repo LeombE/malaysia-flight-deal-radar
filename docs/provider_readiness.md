@@ -1,6 +1,6 @@
 # Provider Readiness
 
-Phase 6A added safety guardrails for future real provider integrations. Phase 6B adds a Duffel adapter behind those guardrails. Phase 8B adds Travelpayouts as a cached fare data provider. Skyscanner is still deferred.
+Phase 6A added safety guardrails for future real provider integrations. Phase 6B adds a Duffel adapter behind those guardrails. Phase 8B adds Travelpayouts as a cached fare data provider. Phase 8G documents Skyscanner access preparation only; it does not add a Skyscanner adapter, credential, readiness entry, or API call.
 
 ## Defaults
 
@@ -33,7 +33,7 @@ MAX_REAL_PROVIDER_SEARCHES_PER_RUN=1
 MAX_REAL_PROVIDER_DAILY_BUDGET=1
 ```
 
-Raise these only after partner terms, rate limits, display permissions, and retention rules are confirmed.
+Raise these only after partner terms, rate limits, display permissions, retention rules, and the real provider activation checklist are confirmed.
 
 ## Required Before Live Search
 
@@ -108,6 +108,8 @@ Duffel uses `unsupported_currency` and `revalidation_not_available` when those p
 
 Travelpayouts reports `cached_data_source=true`, `live_guarantee=false`, and never reports `can_search_live=true`. Its rows are price calendar inputs only and must not be used as confirmed live/bookable offers.
 
+Skyscanner does not appear in readiness output yet because no adapter exists. It should remain absent or documented as deferred until official access, terms, retention, display, deep-link, rate-limit, and freshness/revalidation rules are confirmed.
+
 ## Cloudflare Defaults
 
 Production deployments should start with:
@@ -149,4 +151,4 @@ npm run duffel:smoke -- --profile duffel-airways --departure-date 2026-09-01 --r
 
 Cached or stale fares are not live fares. The dashboard can show stale data only with warning state, and alerts/deep-link display require fresh revalidation. This remains true after real providers are added.
 
-Skyscanner is still deferred until partner API access, retention rules, display rules, and rate limits are confirmed.
+Skyscanner is still deferred until partner API access, retention rules, display rules, deep-link rules, freshness/revalidation behavior, and rate limits are confirmed. Use `docs/providers/skyscanner.md` and `docs/real_provider_activation_checklist.md` before any implementation work.

@@ -44,6 +44,8 @@ This roadmap keeps the project honest: the current online demo uses controlled m
 - Document allowed search, display, retention, cache, and deep-link rules.
 - Define rate-limit and daily-budget defaults.
 - Design request/response schemas before implementation.
+- Record revalidation or freshness requirements before any display or alert eligibility.
+- Keep this phase documentation-only: no adapter, credential, Cloudflare secret, smoke command, or live API call.
 - Do not implement until access and terms are confirmed.
 
 ## Phase 8H: Real Provider Activation Checklist
@@ -56,6 +58,8 @@ This roadmap keeps the project honest: the current online demo uses controlled m
 - Confirm production budgets and kill switches.
 - Confirm dashboard warnings for stale/expired offers.
 - Confirm no raw provider payload persistence unless explicitly allowed.
+- Confirm mock-only tests and sanitized readiness output before any live smoke.
+- Keep provider enablement as a separate explicit approval after the checklist is complete.
 
 ## Phase 9: Limited Live Provider Dry Run
 

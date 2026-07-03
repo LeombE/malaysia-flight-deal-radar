@@ -109,6 +109,7 @@ More detail: `docs/portfolio_evidence.md` and `docs/screenshots.md`.
 - deterministic mock provider for local and deployed demo data
 - provider abstraction with guarded Duffel sandbox adapter and optional Amadeus fallback scaffold
 - Travelpayouts cached fare provider scaffold for recently found fares, disabled by default
+- Skyscanner access-preparation documentation without implementation or credentials
 - KUL Asia Price Calendar with low-to-high RM sorting and cached/live warnings
 - median/p10-based deal scoring using integer MYR minor units
 - stale, expired, and revalidation-aware display logic
@@ -207,11 +208,11 @@ The provider registry supports multiple providers but keeps live providers behin
 - Travelpayouts is a cached data provider, disabled unless explicitly configured.
 - Duffel sandbox adapter exists and is tested, but is not enabled on Cloudflare.
 - Amadeus remains optional/fallback and disabled without credentials.
-- Skyscanner is intentionally deferred until access and terms are confirmed.
+- Skyscanner is intentionally deferred until official access, terms, retention, rate-limit, display, deep-link, and freshness/revalidation rules are confirmed.
 
 Provider readiness reports show whether a provider is configured, enabled, dry-run blocked, budget blocked, cached-only, or disabled. Public readiness output must not expose credentials.
 
-More detail: `docs/provider_readiness.md` and `docs/provider_compliance.md`.
+More detail: `docs/provider_readiness.md`, `docs/provider_compliance.md`, `docs/provider_selection.md`, `docs/providers/skyscanner.md`, and `docs/real_provider_activation_checklist.md`.
 
 ## Cloudflare Deployment Notes
 
@@ -253,6 +254,7 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - deployed demo does not provide live commercial flight coverage
 - cached price calendar rows are recently found/demo fares and must be rechecked before purchase
 - provider access, rate limits, retention rights, and display rights still need final verification before activation
+- Skyscanner is documentation-only preparation; no adapter, credential, API call, or provider-health entry exists
 - Telegram on Cloudflare is implemented but not the focus of the deployed demo evidence
 - dashboard is intentionally minimal and operational, not a consumer product UI
 - historical baselines are controlled demo data until a real provider is enabled
@@ -320,7 +322,7 @@ REAL_PROVIDER_DRY_RUN=true
 DEFAULT_REAL_PROVIDER=
 ```
 
-Do not configure live/sandbox Duffel or Amadeus on Cloudflare until the real-provider activation checklist is complete. Do not add Skyscanner until access and terms are confirmed.
+Do not configure live/sandbox Duffel or Amadeus on Cloudflare until the real-provider activation checklist is complete. Do not add Skyscanner until official access, terms, retention, rate-limit, display, deep-link, and freshness/revalidation rules are confirmed.
 
 Keep cached fare providers disabled unless intentionally testing:
 
@@ -432,5 +434,8 @@ Import safety details:
 - `docs/deployment_smoke_checklist.md`
 - `docs/provider_readiness.md`
 - `docs/provider_compliance.md`
+- `docs/provider_selection.md`
+- `docs/real_provider_activation_checklist.md`
+- `docs/providers/skyscanner.md`
 - `docs/price_calendar.md`
 - `docs/providers/travelpayouts.md`

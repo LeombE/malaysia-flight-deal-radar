@@ -22,6 +22,7 @@
 - Telegram alerts must be sent only for fresh, revalidated, non-expired fares. Alert messages are normalized summaries, not raw provider payloads.
 - Telegram delivery errors must be sanitized and must never include bot tokens.
 - The radar is not a booking engine. Do not create orders, collect passenger identity, store passports, process payments, ticket flights, or implement checkout without a separate approved phase.
+- Future providers must complete `docs/real_provider_activation_checklist.md` before adapter implementation or enablement.
 
 ## Amadeus
 
@@ -62,3 +63,13 @@ If the API returns a link, store it only as a search/recheck link. If a generic 
 This provider is acceptable for a low-budget MVP because it supports discovery and price-calendar browsing without scraping. It is not acceptable for confirmed availability, booking claims, or alerting as a live fare without a separate recheck step.
 
 Amadeus may later supplement limited live checks, but its low-cost-carrier coverage can be incomplete. Duffel is better suited to controlled offer validation than free broad fare scanning. Skyscanner remains a future partner candidate pending access, terms, retention, rate-limit, and display-rights verification.
+
+## Skyscanner
+
+Skyscanner is documentation-only in Phase 8G. No adapter, credential, Cloudflare secret, smoke command, provider registry entry, or readiness entry is added.
+
+Do not call Skyscanner APIs or consumer pages until official partner/API access and terms are confirmed. Do not scrape Skyscanner pages, browser-rendered results, login-protected pages, unofficial endpoints, or CAPTCHA-protected pages.
+
+Before implementation, confirm allowed search scope, Malaysia market support, MYR behavior, display rules, attribution, cache/retention limits, deep-link semantics, rate limits, retry rules, public screenshot/portfolio language, and whether a revalidation or freshness model exists.
+
+Default retention remains `NO_CACHE`. If only search or deep-link handoff is available, Skyscanner-derived content must be labeled as recheck handoff data, not guaranteed live fare or bookable inventory.
