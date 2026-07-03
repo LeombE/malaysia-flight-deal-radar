@@ -1,55 +1,65 @@
 # Screenshot Guide
 
-Use screenshots as portfolio evidence after the deployed demo has been reset, seeded, scanned, and verified.
+Use screenshots as portfolio evidence only after you confirm whether you are capturing the remote mock/demo deployment or local D1 evidence. Do not mix the two in captions.
 
-Do not commit screenshots unless they are intentionally reviewed and contain only mock/demo data. Avoid screenshots that show local shell history with secrets, account IDs, private Cloudflare settings, or unredacted tokens.
+Do not commit screenshots unless they are intentionally reviewed and contain no secrets, private account IDs, token values, local shell history with credentials, passenger data, payment data, or raw provider payloads.
 
-## Recommended Screenshots
+## Evidence Lanes
+
+- Remote live demo: safe mock/demo deployment only. It proves the Worker, D1 connection, dashboard/API routes, mock provider health, and disabled real-provider state. It does not contain real Travelpayouts imported rows.
+- Local D1 evidence: imported Travelpayouts cached rows verified through `npm run cf:dev` and Wrangler local D1. It is not deployed to Cloudflare and is not live/bookable inventory.
+
+## Phase 8F Screenshot Checklist
+
+1. All providers view
+   - Run `npm run cf:dev`.
+   - Capture `http://127.0.0.1:8787/calendar?destination_iata=BKK&include_expired=true`.
+   - Show the provider dropdown and both source categories when local data exists.
+
+2. Travelpayouts cached only view
+   - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK`.
+   - Show `Travelpayouts cached`, `Real cached data`, `provider_name=travelpayouts`, `is_live=false`, `is_bookable_claim=false`, and recheck warning text.
+
+3. Demo data only view
+   - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts_demo&destination_iata=BKK`.
+   - Show `Demo data`, `Demo seed data`, and `provider_name=travelpayouts_demo`.
+
+4. API provider filter response
+   - Capture `http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true`.
+   - Capture `http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts_demo&destination_iata=BKK&include_expired=true`.
+   - Confirm `is_live=false`, `is_bookable_claim=false`, and no raw payload fields.
+
+5. Local D1 import verification
+   - Capture:
+     ```powershell
+     npm run travelpayouts:import:verify:local
+     ```
+   - Show provider/freshness counts and top cached prices without exposing tokens or raw payloads.
+
+6. Provider readiness safe state
+   - Capture deployed `/api/provider-health` or local `/api/provider-health`.
+   - Show mock healthy and real/cached providers disabled, dry-run protected, or blocked by missing credentials.
+   - Confirm Travelpayouts remains disabled on Cloudflare.
+
+## Existing Deployment Screenshots
 
 1. Dashboard with deal cards
    - URL: `https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/dashboard`
-   - Capture at least one `strong_deal` and one `suspected_deal`.
-   - Include visible price, baseline median, discount, provider, and last verified fields.
+   - Capture at least one `strong_deal` and one `suspected_deal` from controlled mock/demo data.
 
-2. KUL Asia Price Calendar
+2. Remote KUL Asia Price Calendar
    - URL: `https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/calendar`
-   - Capture cached fare rows sorted by RM price.
-   - Include visible warning text: cached fare, recheck before purchase, not guaranteed live.
+   - Capture controlled demo rows and cached/recheck warning text.
+   - Caption it as remote mock/demo evidence, not real Travelpayouts import evidence.
 
-3. `/health` JSON
-   - Shows Worker health status.
-   - Confirms the deployed Worker responds.
-
-4. `/api/provider-health` JSON
-   - Shows `mock` healthy/available.
-   - Shows real providers disabled.
-   - Confirm no credential values appear.
-
-5. `/api/deals` JSON
-   - Shows normalized deal records.
-   - Capture deal-label counts or sample records.
-   - Do not expose raw provider payloads.
-
-6. `/api/price-calendar` JSON
-   - Shows normalized calendar rows.
-   - Confirm `is_live=false` and `is_bookable_claim=false`.
-   - Do not expose raw provider payloads.
-
-7. Local Travelpayouts D1 evidence
-   - Run `npm run cf:dev`, not the optional local demo server.
-   - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK`.
-   - Capture `http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true`.
-   - Confirm rows show `provider_name=travelpayouts`, `Real cached data`, `is_live=false`, `is_bookable_claim=false`, and recheck warnings.
-   - Capture a comparison view for `provider_name=travelpayouts_demo` to show controlled demo seed rows separately.
-
-8. Deployment health report output
+3. Deployment health report output
    - Command:
      ```powershell
      npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
      ```
    - Capture health status, provider readiness, deal counts, and top strong/suspected rows.
 
-9. Tests passing
+4. Tests passing
    - Capture:
      ```powershell
      npm run typecheck --if-present
@@ -57,14 +67,11 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
      npm run cf:check
      ```
 
-10. Cloudflare Worker URL
-   - Capture the public dashboard URL or browser address bar.
-   - Do not capture private account settings, tokens, or secret configuration screens.
-
 ## Suggested Portfolio Sequence
 
-1. Start with the dashboard screenshot.
-2. Add the deployment health report.
-3. Add provider-health JSON proving real providers are disabled.
-4. Add tests passing.
-5. Add a short caption explaining that the online demo uses controlled mock fare data and real-provider activation is intentionally gated.
+1. Start with the deployed dashboard screenshot.
+2. Add provider-health JSON proving real providers are disabled.
+3. Add local D1 Travelpayouts evidence through `npm run cf:dev`.
+4. Add API filter screenshots showing `travelpayouts` vs `travelpayouts_demo`.
+5. Add tests passing.
+6. Caption clearly: remote demo is controlled mock/demo; local D1 evidence shows cached Travelpayouts rows that are not live and not bookable.

@@ -31,7 +31,14 @@ This roadmap keeps the project honest: the current online demo uses controlled m
 - Keep cached/recheck warnings visible on every row.
 - Keep imported local D1 evidence separate from deployed mock/demo evidence.
 
-## Phase 8F: Skyscanner Access Preparation
+## Phase 8F: Portfolio Evidence Polish
+
+- Polish README and portfolio evidence docs for reviewer use.
+- Clearly separate remote mock/demo evidence from local D1 Travelpayouts cached evidence.
+- Add screenshot and command checklists for provider-filtered calendar evidence.
+- Keep Travelpayouts disabled on Cloudflare and avoid live/bookable fare claims.
+
+## Phase 8G: Skyscanner Access Preparation
 
 - Confirm official partner/API access path.
 - Document allowed search, display, retention, cache, and deep-link rules.
@@ -39,7 +46,7 @@ This roadmap keeps the project honest: the current online demo uses controlled m
 - Design request/response schemas before implementation.
 - Do not implement until access and terms are confirmed.
 
-## Phase 8G: Real Provider Activation Checklist
+## Phase 8H: Real Provider Activation Checklist
 
 - Confirm provider terms and allowed retention behavior.
 - Confirm MYR support or conversion policy.

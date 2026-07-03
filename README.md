@@ -33,6 +33,11 @@ This project models that workflow end to end:
 
 ## Verified Deployment Evidence
 
+Reviewer evidence is intentionally split into two lanes:
+
+1. Remote live demo = safe mock/demo deployment only. It proves the deployed Worker, D1, dashboard, APIs, provider-health, and mock scan/demo data flow. It does not contain real Travelpayouts imported rows.
+2. Local D1 evidence = imported Travelpayouts cached rows verified through Cloudflare local dev and Wrangler local D1. It proves the cached import and source-separation path without configuring Travelpayouts on Cloudflare.
+
 Current deployed mock/demo status:
 
 - `/health` works
@@ -61,6 +66,41 @@ Generate a sanitized deployment report:
 ```powershell
 npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
 ```
+
+## Portfolio Evidence Guide
+
+Use the live URLs as controlled mock/demo evidence:
+
+- Live demo dashboard: `https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/dashboard`
+- Live demo calendar: `https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev/calendar`
+- Health/API evidence: `/health`, `/api/provider-health`, `/api/deals`, `/api/price-calendar`
+
+Use local Cloudflare Worker dev for imported local D1 Travelpayouts evidence:
+
+```powershell
+npm run cf:dev
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK"
+npm run travelpayouts:import:verify:local
+```
+
+Comparison URLs:
+
+```powershell
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts_demo&destination_iata=BKK"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts_demo&destination_iata=BKK&include_expired=true"
+```
+
+`provider_name=travelpayouts` means local D1 imported cached rows. `provider_name=travelpayouts_demo` means controlled demo seed rows. Both are cached discovery records, not live fares or bookable inventory. Travelpayouts remains disabled on Cloudflare, and no Travelpayouts token is configured remotely.
+
+Safety evidence to highlight:
+
+- cached prices are recently found data and must be rechecked before purchase
+- `is_live=false` and `is_bookable_claim=false` remain visible in API/UI evidence
+- no booking, checkout, payment, ticketing, passenger identity, or passport storage exists
+- no raw provider payloads or secrets are exposed in committed docs, APIs, health checks, or reports
+
+More detail: `docs/portfolio_evidence.md` and `docs/screenshots.md`.
 
 ## Key Features
 
@@ -223,8 +263,9 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - Phase 8C: safe local Travelpayouts cached-fare smoke tooling
 - Phase 8D: local Travelpayouts cached-fare import into local D1
 - Phase 8E: real cached data vs demo data separation for the price calendar
-- Phase 8F: Skyscanner access preparation
-- Phase 8G: real provider activation checklist
+- Phase 8F: portfolio evidence polish and reviewer-ready documentation
+- Phase 8G: Skyscanner access preparation
+- Phase 8H: real provider activation checklist
 - Phase 9: limited live provider dry run
 - Phase 10: production monitoring
 - Phase 11: GitHub Actions or scheduled report automation
