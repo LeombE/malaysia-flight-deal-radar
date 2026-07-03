@@ -37,13 +37,21 @@ Default sorting is:
 3. total duration ascending when available
 4. departure date ascending
 
+Provider filters:
+
+- `provider_name=travelpayouts` shows local D1 rows imported from Travelpayouts cached Data API.
+- `provider_name=travelpayouts_demo` shows controlled demo seed rows.
+- no provider filter keeps the current all-provider behavior.
+
 ## UI Route
 
-`GET /calendar` renders the same records as a table. Every Travelpayouts/demo row must show:
+`GET /calendar` renders the same records as a table. It includes a provider filter for all providers, Travelpayouts cached rows, and demo seed rows. Every Travelpayouts/demo row must show:
 
+- "Cached fare data only. Not live. Recheck before purchase. Prices may have changed."
 - "Cached fare from recent searches. Recheck before purchase."
 - "Not guaranteed live."
 - "Price may have changed."
+- a source badge: "Real cached data" for `travelpayouts` or "Demo seed data" for `travelpayouts_demo`
 
 ## Data Safety
 
@@ -92,12 +100,17 @@ The import does not create a remote Cloudflare path and does not write raw paylo
 
 Repeated imports are idempotent for the same logical fare candidate. The stable key excludes `retrieved_at`; a changed retrieved timestamp updates freshness-related fields instead of creating duplicate rows.
 
-After importing, open:
+After importing, verify through Cloudflare Worker local dev, which reads Wrangler local D1:
 
 ```powershell
-Start-Process "http://localhost:8787/calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
-Start-Process "http://localhost:8787/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+npm run cf:dev
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK"
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts_demo&destination_iata=BKK"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts_demo&destination_iata=BKK&include_expired=true"
 ```
+
+`npm run dev` is optional for the local demo path only; use `npm run cf:dev` for imported local D1 evidence.
 
 Cloudflare remains disabled for Travelpayouts in this phase. Keep the token only in local `.dev.vars` and restore dry-run after testing.
 ## Demo Routes

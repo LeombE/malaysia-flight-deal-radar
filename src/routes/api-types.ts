@@ -89,6 +89,7 @@ export interface PriceCalendarFilters {
   destination_iata?: string;
   destination_region?: string;
   destination_country?: string;
+  provider_name?: string;
   departure_from?: string;
   departure_to?: string;
   stay_length_days?: number;

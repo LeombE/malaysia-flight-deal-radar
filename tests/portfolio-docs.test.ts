@@ -8,6 +8,7 @@ const portfolioDocs = [
   "docs/screenshots.md",
   "docs/resume_project_summary.md",
   "docs/roadmap.md",
+  "docs/portfolio_evidence.md",
   "reports/deployment-health-snapshot.example.md"
 ];
 
@@ -89,9 +90,11 @@ test("roadmap includes required future phases without enabling real providers no
 
   for (const required of [
     "Phase 8B: Travelpayouts Cached Fare Calendar",
-    "Phase 8C: Telegram On Cloudflare",
-    "Phase 8D: Skyscanner Access Preparation",
-    "Phase 8E: Real Provider Activation Checklist",
+    "Phase 8C: Safe Local Travelpayouts Smoke Tooling",
+    "Phase 8D: Local Travelpayouts Import Into Local D1",
+    "Phase 8E: Real Cached Data vs Demo Data Separation",
+    "Phase 8F: Skyscanner Access Preparation",
+    "Phase 8G: Real Provider Activation Checklist",
     "Phase 9: Limited Live Provider Dry Run",
     "Phase 10: Production Monitoring",
     "Phase 11: GitHub Actions / Scheduled Report"
@@ -116,4 +119,15 @@ test("repository hygiene keeps private local artifacts out of git", () => {
   ]) {
     assert.match(gitignore, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+});
+
+test("portfolio evidence uses cf dev for imported local D1 rows", () => {
+  const evidence = readText("docs/portfolio_evidence.md");
+
+  assert.match(evidence, /npm run cf:dev/);
+  assert.match(evidence, /127\.0\.0\.1:8787\/calendar\?provider_name=travelpayouts&destination_iata=BKK/);
+  assert.match(evidence, /provider_name=travelpayouts_demo/);
+  assert.match(evidence, /not evidence that imported rows are being read from Wrangler local D1/i);
+  assert.equal(/live availability is enabled/i.test(evidence), false);
+  assert.equal(/bookable inventory (?:is|are) (?:enabled|available)/i.test(evidence), false);
 });

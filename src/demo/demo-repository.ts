@@ -294,6 +294,7 @@ export class DemoRepository implements ApiRepository, ScanRepository {
         if (filters.destination_iata && row.destination_iata !== filters.destination_iata) return false;
         if (filters.destination_region && row.destination_region !== filters.destination_region) return false;
         if (filters.destination_country && row.destination_country !== filters.destination_country) return false;
+        if (filters.provider_name && row.provider_name !== filters.provider_name) return false;
         if (filters.departure_from && row.departure_date < filters.departure_from) return false;
         if (filters.departure_to && row.departure_date > filters.departure_to) return false;
         if (filters.stay_length_days !== undefined && row.stay_length_days !== filters.stay_length_days) return false;

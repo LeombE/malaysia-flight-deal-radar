@@ -436,6 +436,10 @@ export class D1ApiRepository implements ApiRepository {
       clauses.push("pc.destination_country = ?");
       params.push(filters.destination_country);
     }
+    if (filters.provider_name) {
+      clauses.push("pc.provider_name = ?");
+      params.push(filters.provider_name);
+    }
     if (filters.departure_from) {
       clauses.push("pc.departure_date >= ?");
       params.push(filters.departure_from);

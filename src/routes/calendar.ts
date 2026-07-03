@@ -63,12 +63,23 @@ function freshnessClass(value: PriceCalendarFreshnessLabel): string {
   return "fresh";
 }
 
+function providerDisplay(providerName: string): { label: string; badge: string; badgeClass: string } {
+  if (providerName === "travelpayouts") {
+    return { label: "Travelpayouts cached", badge: "Real cached data", badgeClass: "real" };
+  }
+  if (providerName === "travelpayouts_demo") {
+    return { label: "Demo data", badge: "Demo seed data", badgeClass: "demo" };
+  }
+  return { label: providerName, badge: "Cached data", badgeClass: "cached-source" };
+}
+
 function renderSearchLink(row: PriceCalendarApiRecord): string {
   if (!row.search_link) return "No link";
   return `<a href="${escapeHtml(row.search_link)}" rel="nofollow noopener noreferrer">Search/recheck</a>`;
 }
 
 function renderRow(row: PriceCalendarApiRecord): string {
+  const provider = providerDisplay(row.provider_name);
   return `
     <tr class="${freshnessClass(row.freshness_label)}">
       <td><strong>${escapeHtml(row.origin_iata)} -> ${escapeHtml(row.destination_iata)}</strong><span>${escapeHtml(regionLabel(row.destination_region))}</span></td>
@@ -78,7 +89,7 @@ function renderRow(row: PriceCalendarApiRecord): string {
       <td><strong>${escapeHtml(row.display_price_rm)}</strong><span>${escapeHtml(row.original_amount)} ${escapeHtml(row.original_currency)}</span></td>
       <td>${escapeHtml(row.airline_iata ?? "Unknown")}<span>${escapeHtml(row.flight_number ?? "")}</span></td>
       <td>${escapeHtml(row.stops ?? "Unknown")}</td>
-      <td>${escapeHtml(row.provider_name)}</td>
+      <td><strong>${escapeHtml(provider.label)}</strong><span class="source-badge ${escapeHtml(provider.badgeClass)}">${escapeHtml(provider.badge)}</span><span>provider_name=${escapeHtml(row.provider_name)}</span><span>${escapeHtml(row.source_endpoint)}</span><span class="source-flags">is_live=false; is_bookable_claim=false</span></td>
       <td>${escapeHtml(formatUtc(row.retrieved_at))}</td>
       <td>${escapeHtml(formatUtc(row.expires_at))}</td>
       <td><span class="pill ${freshnessClass(row.freshness_label)}">${escapeHtml(row.freshness_label)}</span></td>
@@ -93,6 +104,10 @@ export function renderCalendarHtml(model: CalendarModel): string {
   const destinationCountries = uniqueSorted(model.destinations.map((destination) => destination.country_code));
   const freshnessLabels: PriceCalendarFreshnessLabel[] = ["fresh", "recent", "cached", "expired"];
   const sortOptions: PriceCalendarSortBy[] = ["price", "departure_date", "duration", "stops"];
+  const providerOptions = [
+    { value: "travelpayouts", label: "Travelpayouts cached" },
+    { value: "travelpayouts_demo", label: "Demo data" }
+  ];
   const rowsMarkup = model.rows.length > 0
     ? model.rows.map(renderRow).join("")
     : `<tr><td colspan="13" class="empty">No matching calendar fares yet.</td></tr>`;
@@ -195,6 +210,20 @@ export function renderCalendarHtml(model: CalendarModel): string {
     .pill.recent { color: var(--recent); }
     .pill.cached { color: var(--cached); }
     .pill.expired { color: var(--expired); }
+    .source-badge {
+      display: inline-block;
+      width: fit-content;
+      margin-top: 5px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: #f7fafb;
+      font-size: 12px;
+    }
+    .source-badge.real { color: var(--accent); border-color: var(--accent); background: #ecf8f8; }
+    .source-badge.demo { color: var(--cached); border-color: var(--cached); background: #f5f1f7; }
+    .source-flags { color: var(--warn); }
     tr.expired { opacity: 0.7; }
     a { color: var(--accent); }
     .empty { color: var(--muted); text-align: center; padding: 28px; }
@@ -204,7 +233,7 @@ export function renderCalendarHtml(model: CalendarModel): string {
   <header>
     <h1>KUL Asia Price Calendar</h1>
     <p>Generated ${escapeHtml(formatUtc(model.generatedAt))}. Rows are cached or recently found fares, sorted by low RM price.</p>
-    <div class="banner">Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.</div>
+    <div class="banner">Cached fare data only. Not live. Recheck before purchase. Prices may have changed.</div>
   </header>
   <main>
     <form method="get" action="/calendar">
@@ -229,6 +258,12 @@ export function renderCalendarHtml(model: CalendarModel): string {
         <select name="destination_iata">
           <option value="">All destinations</option>
           ${model.destinations.map((destination) => `<option value="${escapeHtml(destination.iata_code)}"${selected(model.filters.destination_iata, destination.iata_code)}>${escapeHtml(destination.iata_code)} - ${escapeHtml(destination.city)}</option>`).join("")}
+        </select>
+      </label>
+      <label>Provider
+        <select name="provider_name">
+          <option value=""${model.filters.provider_name ? "" : " selected"}>All providers</option>
+          ${providerOptions.map((provider) => `<option value="${escapeHtml(provider.value)}"${selected(model.filters.provider_name, provider.value)}>${escapeHtml(provider.label)}</option>`).join("")}
         </select>
       </label>
       <label>Depart from

@@ -162,6 +162,8 @@ The generated SQL upserts only normalized `price_calendar_rows` fields. It force
 
 The deterministic import ID excludes `retrieved_at`. The stable dedupe key is provider, endpoint, route, dates, stay length, MYR amount, original currency, carrier, flight number, and stops. On conflict, only mutable fields such as `retrieved_at`, `expires_at`, `freshness_label`, `warning`, `search_link`, and `updated_at` are refreshed.
 
+For portfolio evidence of imported local D1 rows, run `npm run cf:dev` and verify `http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK`. The optional local demo server path is not evidence that Wrangler local D1 contains imported rows.
+
 Do not add `TRAVELPAYOUTS_TOKEN` to Cloudflare for this workflow. After local import, restore:
 
 ```text

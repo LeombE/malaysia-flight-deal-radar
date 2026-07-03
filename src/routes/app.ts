@@ -151,6 +151,7 @@ function priceCalendarFilters(params: URLSearchParams): PriceCalendarFilters {
   const destinationIata = upperParam(params, "destination_iata", "destination");
   const destinationRegion = normalizedRegionParam(params, "destination_region", "region");
   const country = upperParam(params, "destination_country", "country_code", "country");
+  const providerName = stringParam(params, "provider_name", "provider");
   const hasDestinationScope = Boolean(destinationIata || destinationRegion || country);
   const filters: PriceCalendarFilters = {
     origin_iata: upperParam(params, "origin_iata", "origin") ?? "KUL",
@@ -169,6 +170,7 @@ function priceCalendarFilters(params: URLSearchParams): PriceCalendarFilters {
   const maxStops = integerParam(params, "max_stops");
   const includeExpired = booleanParam(params, "include_expired");
   if (country) filters.destination_country = country;
+  if (providerName) filters.provider_name = providerName;
   if (departureFrom) filters.departure_from = departureFrom;
   if (departureTo) filters.departure_to = departureTo;
   if (maxStops !== undefined) filters.max_stops = maxStops;

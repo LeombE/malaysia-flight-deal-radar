@@ -35,14 +35,21 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
    - Confirm `is_live=false` and `is_bookable_claim=false`.
    - Do not expose raw provider payloads.
 
-7. Deployment health report output
+7. Local Travelpayouts D1 evidence
+   - Run `npm run cf:dev`, not the optional local demo server.
+   - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK`.
+   - Capture `http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true`.
+   - Confirm rows show `provider_name=travelpayouts`, `Real cached data`, `is_live=false`, `is_bookable_claim=false`, and recheck warnings.
+   - Capture a comparison view for `provider_name=travelpayouts_demo` to show controlled demo seed rows separately.
+
+8. Deployment health report output
    - Command:
      ```powershell
      npm run cf:demo:report:remote -- --base-url "https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.workers.dev"
      ```
    - Capture health status, provider readiness, deal counts, and top strong/suspected rows.
 
-8. Tests passing
+9. Tests passing
    - Capture:
      ```powershell
      npm run typecheck --if-present
@@ -50,7 +57,7 @@ Do not commit screenshots unless they are intentionally reviewed and contain onl
      npm run cf:check
      ```
 
-9. Cloudflare Worker URL
+10. Cloudflare Worker URL
    - Capture the public dashboard URL or browser address bar.
    - Do not capture private account settings, tokens, or secret configuration screens.
 

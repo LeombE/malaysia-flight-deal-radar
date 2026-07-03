@@ -222,8 +222,9 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - Phase 8B: Travelpayouts cached fare provider and KUL Asia Price Calendar
 - Phase 8C: safe local Travelpayouts cached-fare smoke tooling
 - Phase 8D: local Travelpayouts cached-fare import into local D1
-- Phase 8E: Skyscanner access preparation
-- Phase 8F: real provider activation checklist
+- Phase 8E: real cached data vs demo data separation for the price calendar
+- Phase 8F: Skyscanner access preparation
+- Phase 8G: real provider activation checklist
 - Phase 9: limited live provider dry run
 - Phase 10: production monitoring
 - Phase 11: GitHub Actions or scheduled report automation
@@ -349,13 +350,17 @@ npm run travelpayouts:import:local -- --endpoint week-matrix --origin KUL --dest
 npm run travelpayouts:import:verify:local
 ```
 
-Then verify in the local app:
+Then verify through Cloudflare Worker local dev, which reads Wrangler local D1:
 
 ```powershell
-npm run dev
-Start-Process "http://localhost:8787/calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
-Start-Process "http://localhost:8787/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia"
+npm run cf:dev
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK"
+Start-Process "http://127.0.0.1:8787/calendar?provider_name=travelpayouts_demo&destination_iata=BKK"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts&destination_iata=BKK&include_expired=true"
+Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayouts_demo&destination_iata=BKK&include_expired=true"
 ```
+
+`npm run dev` remains useful for the optional local demo path, but it is not portfolio evidence for imported local D1 rows.
 
 After import, restore safe local settings:
 
@@ -368,6 +373,9 @@ Import safety details:
 
 - target is forced to local; there is no remote/preview import script in this phase
 - request limit is capped at 10
+- `provider_name=travelpayouts` means local D1 rows imported from Travelpayouts cached Data API
+- `provider_name=travelpayouts_demo` means controlled demo seed rows
+- both sources remain cached discovery data with no live or bookable claim
 - allowed import destinations are `BKK`, `TPE`, `DPS`, and `SIN`
 - rows are stored as normalized calendar discovery data only
 - `is_live=0` and `is_bookable_claim=0` are always written

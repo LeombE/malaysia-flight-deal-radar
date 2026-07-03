@@ -299,6 +299,7 @@ class MemoryApiRepository implements ApiRepository {
         if (filters.destination_iata && item.destination_iata !== filters.destination_iata) return false;
         if (filters.destination_region && item.destination_region !== filters.destination_region) return false;
         if (filters.destination_country && item.destination_country !== filters.destination_country) return false;
+        if (filters.provider_name && item.provider_name !== filters.provider_name) return false;
         return true;
       })
       .sort((left, right) => (left.amount_minor_myr ?? 9999999) - (right.amount_minor_myr ?? 9999999));
@@ -451,6 +452,34 @@ test("GET /api/price-calendar applies region filter and sorts by price", async (
   assert.deepEqual(body.price_calendar.map((row) => row.destination_iata), ["BKK"]);
 });
 
+test("GET /api/price-calendar filters real cached and demo providers", async () => {
+  const imported: PriceCalendarApiRecord = {
+    ...priceCalendar[1]!,
+    provider_name: "travelpayouts",
+    source_endpoint: "v2/prices/week-matrix",
+    amount_minor_myr: 84_000,
+    display_price_rm: "RM840.00",
+    retrieved_at: "2026-06-10T07:30:00.000Z"
+  };
+  const repository = new MemoryApiRepository([priceCalendar[1]!, imported]);
+  const { request } = app({ repository });
+
+  const real = await request("/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia&provider_name=travelpayouts");
+  const realBody = await json<{ price_calendar: PriceCalendarApiRecord[] }>(real);
+
+  assert.equal(real.status, 200);
+  assert.equal(repository.lastPriceCalendarFilters?.provider_name, "travelpayouts");
+  assert.deepEqual(realBody.price_calendar.map((row) => row.provider_name), ["travelpayouts"]);
+  assert.equal(JSON.stringify(realBody).includes("rawPayload"), false);
+  assert.equal(JSON.stringify(realBody).includes("TRAVELPAYOUTS_TOKEN"), false);
+
+  const demo = await request("/api/price-calendar?destination_iata=BKK&destination_region=Southeast%20Asia&provider=travelpayouts_demo");
+  const demoBody = await json<{ price_calendar: PriceCalendarApiRecord[] }>(demo);
+
+  assert.equal(demo.status, 200);
+  assert.deepEqual(demoBody.price_calendar.map((row) => row.provider_name), ["travelpayouts_demo"]);
+});
+
 
 test("GET /api/price-calendar and /calendar can render imported Travelpayouts rows", async () => {
   const imported: PriceCalendarApiRecord = {
@@ -477,10 +506,14 @@ test("GET /api/price-calendar and /calendar can render imported Travelpayouts ro
   const html = await page.text();
 
   assert.equal(page.status, 200);
-  assert.match(html, /travelpayouts/);
+  assert.match(html, /Travelpayouts cached/);
+  assert.match(html, /Real cached data/);
+  assert.match(html, /provider_name=travelpayouts/);
+  assert.match(html, /is_live=false; is_bookable_claim=false/);
   assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
   assert.match(html, /Generic links may not preserve this fare\./);
   assert.equal(html.includes("rawPayload"), false);
+  assert.equal(html.includes("TRAVELPAYOUTS_TOKEN"), false);
 });
 test("GET /api/provider-health includes Amadeus as disabled when credentials are missing", async () => {
   const { request } = app();
@@ -588,12 +621,18 @@ test("GET /calendar renders cached fare warning labels and filters", async () =>
   assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
   assert.match(html, /Not guaranteed live/);
   assert.match(html, /Price may have changed/);
+  assert.match(html, /Cached fare data only\. Not live\. Recheck before purchase\. Prices may have changed\./);
   assert.match(html, /name="destination_region"/);
   assert.match(html, /name="destination_iata"/);
+  assert.match(html, /name="provider_name"/);
+  assert.match(html, /All providers/);
+  assert.match(html, /Travelpayouts cached/);
+  assert.match(html, /Demo data/);
   assert.match(html, /name="stay_length_days"/);
   assert.match(html, /name="max_stops"/);
   assert.match(html, /RM459\.00/);
-  assert.match(html, /travelpayouts_demo/);
+  assert.match(html, /Demo seed data/);
+  assert.match(html, /provider_name=travelpayouts_demo/);
   assert.equal(html.includes("rawPayload"), false);
 });
 

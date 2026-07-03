@@ -35,6 +35,7 @@ Supported price-calendar filters include:
 - `destination_iata` or `destination`
 - `destination_region` or `region`
 - `destination_country` or `country`
+- `provider_name` or `provider`
 - `departure_from`
 - `departure_to`
 - `stay_length_days` or `stay_length`
@@ -46,7 +47,7 @@ Supported price-calendar filters include:
 - `sort_by`
 - `sort_order`
 
-Price-calendar rows are cached discovery records. They return `is_live=false`, `is_bookable_claim=false`, and warning text by design.
+Price-calendar rows are cached discovery records. They return `is_live=false`, `is_bookable_claim=false`, and warning text by design. Use `provider_name=travelpayouts` for locally imported Travelpayouts cached rows and `provider_name=travelpayouts_demo` for controlled demo seed rows.
 
 ## Admin Endpoints
 
