@@ -59,15 +59,19 @@ function createSpawnMock(input: {
   return { calls, spawnImpl };
 }
 
-test("Wrangler D1 runner uses npx.cmd on Windows and keeps SQL paths with spaces as one arg", () => {
+test("Wrangler D1 runner uses cmd.exe on Windows and keeps SQL paths with spaces as one arg", () => {
   const command = runner.buildWranglerD1ExecuteCommand({
     platform: "win32",
     databaseName: "malaysia-flight-deal-radar",
     sqlFilePath: SQL_PATH_WITH_SPACES
   });
 
-  assert.equal(command.command, "npx.cmd");
+  assert.equal(command.command, "cmd.exe");
   assert.deepEqual(command.args, [
+    "/d",
+    "/s",
+    "/c",
+    "npx.cmd",
     "wrangler",
     "d1",
     "execute",
@@ -102,10 +106,10 @@ test("Wrangler D1 runner passes command and args array to spawn", async () => {
     spawnImpl: mock.spawnImpl
   });
 
-  assert.equal(result.command, "npx.cmd");
+  assert.equal(result.command, "cmd.exe");
   assert.equal(result.args[result.args.indexOf("--file") + 1], SQL_PATH_WITH_SPACES);
   assert.equal(mock.calls.length, 1);
-  assert.equal(mock.calls[0]?.command, "npx.cmd");
+  assert.equal(mock.calls[0]?.command, "cmd.exe");
   assert.equal(mock.calls[0]?.args.includes("--local"), true);
   assert.equal(mock.calls[0]?.args.includes("--file"), true);
   assert.equal(mock.calls[0]?.args[mock.calls[0].args.indexOf("--file") + 1], SQL_PATH_WITH_SPACES);
@@ -131,7 +135,7 @@ test("Wrangler D1 runner reports spawn EINVAL with sanitized diagnostics", async
       const message = thrown instanceof Error ? thrown.message : String(thrown);
       assert.match(message, /failed before process start/);
       assert.match(message, /Error code: EINVAL/);
-      assert.match(message, /npx\.cmd wrangler d1 execute malaysia-flight-deal-radar --local --file/);
+      assert.match(message, /cmd\.exe \/d \/s \/c npx\.cmd wrangler d1 execute malaysia-flight-deal-radar --local --file/);
       assert.match(message, /flight API real time/);
       assert.equal(message.includes(TOKEN), false);
       assert.equal(message.includes("raw-provider-payload"), false);

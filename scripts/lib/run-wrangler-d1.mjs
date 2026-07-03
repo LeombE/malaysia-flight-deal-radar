@@ -3,18 +3,37 @@ import { resolve } from "node:path";
 
 export function buildWranglerD1ExecuteCommand(options) {
   const platform = options.platform || process.platform;
-  const command = platform === "win32" ? "npx.cmd" : "npx";
   const databaseName = options.databaseName || "malaysia-flight-deal-radar";
-  const args = [
-    "wrangler",
-    "d1",
-    "execute",
-    databaseName,
-    "--local",
-    "--file",
-    options.sqlFilePath
-  ];
-  return { command, args };
+  if (platform === "win32") {
+    return {
+      command: "cmd.exe",
+      args: [
+        "/d",
+        "/s",
+        "/c",
+        "npx.cmd",
+        "wrangler",
+        "d1",
+        "execute",
+        databaseName,
+        "--local",
+        "--file",
+        options.sqlFilePath
+      ]
+    };
+  }
+  return {
+    command: "npx",
+    args: [
+      "wrangler",
+      "d1",
+      "execute",
+      databaseName,
+      "--local",
+      "--file",
+      options.sqlFilePath
+    ]
+  };
 }
 
 function redactionValues(values) {
