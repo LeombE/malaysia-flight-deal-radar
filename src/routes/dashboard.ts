@@ -1,5 +1,5 @@
 import type { DealLabel } from "../scoring/types.ts";
-import type { AirportApiRecord, DealApiRecord } from "./api-types.ts";
+import type { AirportApiRecord, DealApiRecord, ProviderLimitApiRecord } from "./api-types.ts";
 
 export interface DashboardFilters {
   origin_iata?: string;
@@ -17,9 +17,12 @@ export interface DashboardModel {
   origins: AirportApiRecord[];
   destinations: AirportApiRecord[];
   deals: DealApiRecord[];
+  providerLimits: ProviderLimitApiRecord[];
   filters: DashboardFilters;
   generatedAt: string;
 }
+
+const DEMO_BANNER_TEXT = "Remote demo uses controlled mock data only. Prices are not live and must be rechecked.";
 
 function escapeHtml(value: string | number | null | undefined): string {
   return String(value ?? "")
@@ -72,6 +75,55 @@ function freshnessFor(deal: DealApiRecord, generatedAt: string): { className: st
   return { className: "stale", text: "Stale / needs revalidation" };
 }
 
+function dedupeDashboardDeals(deals: DealApiRecord[]): DealApiRecord[] {
+  const seen = new Set<string>();
+  const deduped: DealApiRecord[] = [];
+  for (const deal of deals) {
+    const key = [
+      deal.provider_name,
+      deal.origin,
+      deal.destination,
+      deal.departure_date,
+      deal.return_date,
+      deal.deal_label
+    ].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(deal);
+  }
+  return deduped;
+}
+
+function mockProviderStatus(providerLimits: ProviderLimitApiRecord[]): string {
+  return providerLimits.find((provider) => provider.provider_name === "mock")?.health_status ?? "unknown";
+}
+
+function renderMetric(label: string, value: string | number): string {
+  return `
+    <div class="summary-card">
+      <dt>${escapeHtml(label)}</dt>
+      <dd>${escapeHtml(value)}</dd>
+    </div>
+  `;
+}
+
+function renderSummary(deals: DealApiRecord[], providerLimits: ProviderLimitApiRecord[], generatedAt: string): string {
+  const strongDeals = deals.filter((deal) => deal.deal_label === "strong_deal").length;
+  const suspectedDeals = deals.filter((deal) => deal.deal_label === "suspected_deal").length;
+  const staleDeals = deals.filter((deal) => freshnessFor(deal, generatedAt).className === "stale").length;
+  return `
+    <section class="summary-panel" aria-label="Dashboard demo summary">
+      <dl class="summary-grid">
+        ${renderMetric("Total demo cards", deals.length)}
+        ${renderMetric("Strong deals", strongDeals)}
+        ${renderMetric("Suspected deals", suspectedDeals)}
+        ${renderMetric("Stale / revalidate", staleDeals)}
+        ${renderMetric("Mock provider status", mockProviderStatus(providerLimits))}
+      </dl>
+    </section>
+  `;
+}
+
 function renderDealCard(deal: DealApiRecord, generatedAt: string): string {
   const warning = deal.warning
     ? `<p class="warning">${escapeHtml(deal.warning)}</p>`
@@ -108,8 +160,9 @@ export function renderDashboardHtml(model: DashboardModel): string {
   const destinationRegions = uniqueSorted(model.destinations.map((destination) => destination.region_group));
   const destinationCountries = uniqueSorted(model.destinations.map((destination) => destination.country_code));
   const dealLabels: DealLabel[] = ["strong_deal", "suspected_deal", "watched_price", "no_deal", "urgent_revalidate", "expired"];
-  const dealsMarkup = model.deals.length > 0
-    ? model.deals.map((deal) => renderDealCard(deal, model.generatedAt)).join("")
+  const visibleDeals = dedupeDashboardDeals(model.deals);
+  const dealsMarkup = visibleDeals.length > 0
+    ? visibleDeals.map((deal) => renderDealCard(deal, model.generatedAt)).join("")
     : `<section class="empty">No matching deals yet.</section>`;
 
   return `<!doctype html>
@@ -147,6 +200,31 @@ export function renderDashboardHtml(model: DashboardModel): string {
     header h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: 0; }
     header p { margin: 0; color: var(--muted); }
     main { padding: 20px clamp(16px, 4vw, 48px) 42px; }
+    .demo-banner {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border: 1px solid #b8d4d6;
+      border-left: 5px solid var(--accent);
+      border-radius: 8px;
+      background: #f7fbfb;
+      color: var(--ink);
+      font-weight: 700;
+    }
+    .summary-panel { margin-bottom: 18px; }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 10px;
+      margin: 0;
+    }
+    .summary-card {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .summary-card dt { color: var(--muted); font-size: 12px; }
+    .summary-card dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
     form {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -237,6 +315,8 @@ export function renderDashboardHtml(model: DashboardModel): string {
     <p>Generated ${escapeHtml(formatVerified(model.generatedAt))}. Stale offers are flagged for revalidation.</p>
   </header>
   <main>
+    <section class="demo-banner">${escapeHtml(DEMO_BANNER_TEXT)}</section>
+    ${renderSummary(visibleDeals, model.providerLimits, model.generatedAt)}
     <form method="get" action="/dashboard">
       <label>Origin
         <select name="origin_iata">

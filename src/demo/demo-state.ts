@@ -20,6 +20,75 @@ export const DEMO_NOW_ISO = "2026-06-10T08:00:00.000Z";
 export const DEMO_DEPARTURE_DATE = "2026-07-25";
 export const DEMO_RETURN_DATE = "2026-07-30";
 export const DEMO_STAY_LENGTH_DAYS = 5;
+export interface DemoRouteProfile {
+  originIata: string;
+  destinationIata: string;
+  departureDate: string;
+  returnDate: string;
+  stayLengthDays: number;
+  lowAmountMinorMyr: number;
+  medianAmountMinorMyr: number;
+  idPrefix: string;
+  priority: number;
+}
+
+export const DEMO_ROUTE_PROFILES: DemoRouteProfile[] = [
+  {
+    originIata: "KUL",
+    destinationIata: "BKK",
+    departureDate: "2026-07-25",
+    returnDate: "2026-07-30",
+    stayLengthDays: 5,
+    lowAmountMinorMyr: 50_000,
+    medianAmountMinorMyr: 63_000,
+    idPrefix: "hist-kul-bkk",
+    priority: 1
+  },
+  {
+    originIata: "KUL",
+    destinationIata: "TPE",
+    departureDate: "2026-08-02",
+    returnDate: "2026-08-08",
+    stayLengthDays: 6,
+    lowAmountMinorMyr: 43_000,
+    medianAmountMinorMyr: 60_000,
+    idPrefix: "hist-kul-tpe",
+    priority: 2
+  },
+  {
+    originIata: "KUL",
+    destinationIata: "SIN",
+    departureDate: "2026-08-09",
+    returnDate: "2026-08-12",
+    stayLengthDays: 3,
+    lowAmountMinorMyr: 36_000,
+    medianAmountMinorMyr: 43_000,
+    idPrefix: "hist-kul-sin",
+    priority: 3
+  },
+  {
+    originIata: "JHB",
+    destinationIata: "BKK",
+    departureDate: "2026-08-16",
+    returnDate: "2026-08-22",
+    stayLengthDays: 6,
+    lowAmountMinorMyr: 41_000,
+    medianAmountMinorMyr: 57_000,
+    idPrefix: "hist-jhb-bkk",
+    priority: 4
+  },
+  {
+    originIata: "SZB",
+    destinationIata: "NRT",
+    departureDate: "2026-09-03",
+    returnDate: "2026-09-10",
+    stayLengthDays: 7,
+    lowAmountMinorMyr: 60_000,
+    medianAmountMinorMyr: 76_000,
+    idPrefix: "hist-szb-nrt",
+    priority: 5
+  }
+];
 
 export interface DemoAirportRecord extends AirportApiRecord {
   is_origin: boolean;
@@ -81,27 +150,25 @@ function destinationLookup(): Map<string, AirportSeed> {
 }
 
 function route(
-  originIata: string,
-  destinationIata: string,
-  priority: number,
+  profile: DemoRouteProfile,
   source: RoutePrioritySource = "popular_seed"
 ): DemoRouteCandidate {
-  const destination = destinationLookup().get(destinationIata);
+  const destination = destinationLookup().get(profile.destinationIata);
   if (!destination) {
-    throw new Error(`Unknown demo destination ${destinationIata}`);
+    throw new Error(`Unknown demo destination ${profile.destinationIata}`);
   }
   return {
-    originIata,
-    destinationIata,
+    originIata: profile.originIata,
+    destinationIata: profile.destinationIata,
     countryCode: destination.country_code,
     regionGroup: destination.region_group,
-    priority,
+    priority: profile.priority,
     source: source === "popular_seed" ? "seed" : source,
     prioritySource: source,
     active: true,
-    departureDate: DEMO_DEPARTURE_DATE,
-    returnDate: DEMO_RETURN_DATE,
-    stayLengthDays: DEMO_STAY_LENGTH_DAYS,
+    departureDate: profile.departureDate,
+    returnDate: profile.returnDate,
+    stayLengthDays: profile.stayLengthDays,
     lastScannedAt: null
   };
 }
@@ -117,6 +184,9 @@ function baselineSamples(lowMinor: number, medianMinor: number): number[] {
 function historicalSnapshots(input: {
   originIata: string;
   destinationIata: string;
+  departureDate: string;
+  returnDate: string;
+  stayLengthDays: number;
   samples: number[];
   idPrefix: string;
 }): PersistedFareSnapshot[] {
@@ -127,9 +197,9 @@ function historicalSnapshots(input: {
       provider: "demo_seed",
       originIata: input.originIata,
       destinationIata: input.destinationIata,
-      departureDate: DEMO_DEPARTURE_DATE,
-      returnDate: DEMO_RETURN_DATE,
-      stayLengthDays: DEMO_STAY_LENGTH_DAYS,
+      departureDate: input.departureDate,
+      returnDate: input.returnDate,
+      stayLengthDays: input.stayLengthDays,
       amountMinorMyr,
       observedAt,
       retentionMode: "AGGREGATE_ONLY",
@@ -227,46 +297,17 @@ function demoPriceCalendarRows(): DemoPriceCalendarRecord[] {
 }
 
 export function createSeededDemoState(nowIso = DEMO_NOW_ISO): DemoState {
-  const routeCandidates = [
-    route("KUL", "BKK", 1),
-    route("KUL", "TPE", 2),
-    route("KUL", "SIN", 3),
-    route("JHB", "BKK", 4),
-    route("SZB", "NRT", 5)
-  ];
+  const routeCandidates = DEMO_ROUTE_PROFILES.map((profile) => route(profile));
 
-  const fareSnapshots = [
-    ...historicalSnapshots({
-      originIata: "KUL",
-      destinationIata: "BKK",
-      idPrefix: "hist-kul-bkk",
-      samples: baselineSamples(50_000, 63_000)
-    }),
-    ...historicalSnapshots({
-      originIata: "KUL",
-      destinationIata: "TPE",
-      idPrefix: "hist-kul-tpe",
-      samples: baselineSamples(44_000, 58_000)
-    }),
-    ...historicalSnapshots({
-      originIata: "KUL",
-      destinationIata: "SIN",
-      idPrefix: "hist-kul-sin",
-      samples: baselineSamples(44_000, 50_000)
-    }),
-    ...historicalSnapshots({
-      originIata: "JHB",
-      destinationIata: "BKK",
-      idPrefix: "hist-jhb-bkk",
-      samples: baselineSamples(42_000, 55_000)
-    }),
-    ...historicalSnapshots({
-      originIata: "SZB",
-      destinationIata: "NRT",
-      idPrefix: "hist-szb-nrt",
-      samples: baselineSamples(55_000, 70_000)
-    })
-  ];
+  const fareSnapshots = DEMO_ROUTE_PROFILES.flatMap((profile) => historicalSnapshots({
+    originIata: profile.originIata,
+    destinationIata: profile.destinationIata,
+    departureDate: profile.departureDate,
+    returnDate: profile.returnDate,
+    stayLengthDays: profile.stayLengthDays,
+    idPrefix: profile.idPrefix,
+    samples: baselineSamples(profile.lowAmountMinorMyr, profile.medianAmountMinorMyr)
+  }));
 
   return {
     schemaVersion: 1,

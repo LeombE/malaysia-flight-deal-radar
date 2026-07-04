@@ -9,12 +9,13 @@ const SEED_SQL_PATH = "scripts/sql/remote-demo-baseline-seed.sql";
 const VERIFY_SQL_PATH = "scripts/sql/remote-demo-baseline-verify.sql";
 const CLEANUP_SQL_PATH = "scripts/sql/remote-demo-cleanup.sql";
 const DEMO_NOW = new Date("2026-06-10T08:00:00.000Z");
-const DEMO_DEPARTURE_DATE = "2026-07-25";
-const DEMO_RETURN_DATE = "2026-07-30";
 
 interface DemoRouteSeed {
   origin: string;
   destination: string;
+  departureDate: string;
+  returnDate: string;
+  stayLengthDays: number;
   lowAmountMinorMyr: number;
   medianAmountMinorMyr: number;
 }
@@ -28,13 +29,16 @@ function routeKey(route: Pick<DemoRouteSeed, "origin" | "destination">): string 
 }
 
 function parseRouteSeeds(sql: string): DemoRouteSeed[] {
-  const routeBlock = sql.match(/demo_routes\(origin_iata, destination_iata, low_amount_minor_myr, median_amount_minor_myr\) AS \(\s*VALUES([\s\S]*?)\s*\),\s*samples/);
+  const routeBlock = sql.match(/demo_routes\(origin_iata, destination_iata, departure_date, return_date, stay_length_days, low_amount_minor_myr, median_amount_minor_myr\) AS \(\s*VALUES([\s\S]*?)\s*\),\s*samples/);
   assert.ok(routeBlock?.[1], "demo route CTE must be present");
-  return [...routeBlock[1].matchAll(/\('([A-Z]{3})', '([A-Z]{3})', ([0-9]+), ([0-9]+)\)/g)].map((match) => ({
+  return [...routeBlock[1].matchAll(/\('([A-Z]{3})', '([A-Z]{3})', '([0-9]{4}-[0-9]{2}-[0-9]{2})', '([0-9]{4}-[0-9]{2}-[0-9]{2})', ([0-9]+), ([0-9]+), ([0-9]+)\)/g)].map((match) => ({
     origin: match[1] ?? "",
     destination: match[2] ?? "",
-    lowAmountMinorMyr: Number.parseInt(match[3] ?? "0", 10),
-    medianAmountMinorMyr: Number.parseInt(match[4] ?? "0", 10)
+    departureDate: match[3] ?? "",
+    returnDate: match[4] ?? "",
+    stayLengthDays: Number.parseInt(match[5] ?? "0", 10),
+    lowAmountMinorMyr: Number.parseInt(match[6] ?? "0", 10),
+    medianAmountMinorMyr: Number.parseInt(match[7] ?? "0", 10)
   }));
 }
 
@@ -74,9 +78,15 @@ test("remote demo seed uses integer MYR minor units and at least 20 samples per 
   assert.equal(sampleIndexes.length, 20);
   assert.deepEqual(sampleIndexes, Array.from({ length: 20 }, (_value, index) => index + 1));
 
+  assert.equal(new Set(routes.map((route) => route.departureDate)).size >= 3, true);
+  assert.equal(new Set(routes.map((route) => route.stayLengthDays)).size >= 3, true);
+
   for (const route of routes) {
+    assert.equal(Number.isInteger(route.stayLengthDays), true);
     assert.equal(Number.isInteger(route.lowAmountMinorMyr), true);
     assert.equal(Number.isInteger(route.medianAmountMinorMyr), true);
+    assert.equal(route.departureDate < route.returnDate, true);
+    assert.equal(route.stayLengthDays > 0, true);
     assert.equal(route.lowAmountMinorMyr > 0, true);
     assert.equal(route.medianAmountMinorMyr > 0, true);
     assert.equal(historicalSamplesFor(route, sampleIndexes).length >= 20, true);
@@ -230,8 +240,8 @@ test("seeded baselines produce dashboard/API-ready median and p10 deal labels", 
     const [offer] = await provider.searchRoundTripOffers({
       originIata: route.origin,
       destinationIata: route.destination,
-      departureDate: DEMO_DEPARTURE_DATE,
-      returnDate: DEMO_RETURN_DATE,
+      departureDate: route.departureDate,
+      returnDate: route.returnDate,
       adults: 1
     });
     assert.ok(offer);

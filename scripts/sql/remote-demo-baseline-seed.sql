@@ -58,19 +58,19 @@ INSERT INTO watchlist (
   updated_at
 ) VALUES
   ('remote-demo-watchlist-kul-bkk', 'KUL', 'BKK', '2026-07-25', '2026-07-30', 5, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
-  ('remote-demo-watchlist-kul-tpe', 'KUL', 'TPE', '2026-07-25', '2026-07-30', 5, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
-  ('remote-demo-watchlist-kul-sin', 'KUL', 'SIN', '2026-07-25', '2026-07-30', 5, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
-  ('remote-demo-watchlist-jhb-bkk', 'JHB', 'BKK', '2026-07-25', '2026-07-30', 5, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
-  ('remote-demo-watchlist-szb-nrt', 'SZB', 'NRT', '2026-07-25', '2026-07-30', 5, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z');
+  ('remote-demo-watchlist-kul-tpe', 'KUL', 'TPE', '2026-08-02', '2026-08-08', 6, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
+  ('remote-demo-watchlist-kul-sin', 'KUL', 'SIN', '2026-08-09', '2026-08-12', 3, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
+  ('remote-demo-watchlist-jhb-bkk', 'JHB', 'BKK', '2026-08-16', '2026-08-22', 6, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z'),
+  ('remote-demo-watchlist-szb-nrt', 'SZB', 'NRT', '2026-09-03', '2026-09-10', 7, NULL, 1, '2026-06-10T08:00:00.000Z', '2026-06-10T08:00:00.000Z');
 
 WITH
-  demo_routes(origin_iata, destination_iata, low_amount_minor_myr, median_amount_minor_myr) AS (
+  demo_routes(origin_iata, destination_iata, departure_date, return_date, stay_length_days, low_amount_minor_myr, median_amount_minor_myr) AS (
     VALUES
-      ('KUL', 'BKK', 50000, 63000),
-      ('KUL', 'TPE', 44000, 58000),
-      ('KUL', 'SIN', 44000, 50000),
-      ('JHB', 'BKK', 42000, 55000),
-      ('SZB', 'NRT', 55000, 70000)
+      ('KUL', 'BKK', '2026-07-25', '2026-07-30', 5, 50000, 63000),
+      ('KUL', 'TPE', '2026-08-02', '2026-08-08', 6, 43000, 60000),
+      ('KUL', 'SIN', '2026-08-09', '2026-08-12', 3, 36000, 43000),
+      ('JHB', 'BKK', '2026-08-16', '2026-08-22', 6, 41000, 57000),
+      ('SZB', 'NRT', '2026-09-03', '2026-09-10', 7, 60000, 76000)
   ),
   samples(sample_index) AS (
     VALUES
@@ -97,9 +97,9 @@ SELECT
   'mock',
   demo_routes.origin_iata,
   demo_routes.destination_iata,
-  '2026-07-25',
-  '2026-07-30',
-  5,
+  demo_routes.departure_date,
+  demo_routes.return_date,
+  demo_routes.stay_length_days,
   'economy',
   CASE
     WHEN samples.sample_index <= 2 THEN demo_routes.low_amount_minor_myr
@@ -109,4 +109,3 @@ SELECT
   'AGGREGATE_ONLY'
 FROM demo_routes
 CROSS JOIN samples;
-

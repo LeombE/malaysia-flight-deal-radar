@@ -428,15 +428,17 @@ export async function handleAppRequest(
   if (url.pathname === "/" || url.pathname === "/dashboard") {
     if (request.method !== "GET") return methodNotAllowed();
     const filters = dealFilters(url.searchParams);
-    const [origins, destinations, deals] = await Promise.all([
+    const [origins, destinations, deals, providerLimits] = await Promise.all([
       dependencies.apiRepository.listOrigins(),
       dependencies.apiRepository.listDestinations(destinationFilters(url.searchParams)),
-      dependencies.apiRepository.listDeals(filters, now, dependencies.schedulerConfig.revalidateBeforeAlertMinutes)
+      dependencies.apiRepository.listDeals(filters, now, dependencies.schedulerConfig.revalidateBeforeAlertMinutes),
+      dependencies.apiRepository.listProviderLimits()
     ]);
     return htmlResponse(renderDashboardHtml({
       origins,
       destinations,
       deals,
+      providerLimits,
       filters,
       generatedAt: now.toISOString()
     }));

@@ -7,6 +7,78 @@ import type {
   SearchRoundTripInput
 } from "./types.ts";
 
+interface MockRouteProfile {
+  amountMinorMyr: number;
+  carriers: string[];
+  totalStops: number;
+  totalDurationMinutes: number;
+  outboundDurationMinutes: number;
+  inboundDurationMinutes: number;
+}
+
+const DEMO_ROUTE_PROFILES: Record<string, MockRouteProfile> = {
+  "KUL-BKK": {
+    amountMinorMyr: 44_100,
+    carriers: ["AK"],
+    totalStops: 0,
+    totalDurationMinutes: 270,
+    outboundDurationMinutes: 135,
+    inboundDurationMinutes: 135
+  },
+  "KUL-TPE": {
+    amountMinorMyr: 46_900,
+    carriers: ["OD"],
+    totalStops: 0,
+    totalDurationMinutes: 570,
+    outboundDurationMinutes: 285,
+    inboundDurationMinutes: 285
+  },
+  "KUL-SIN": {
+    amountMinorMyr: 38_900,
+    carriers: ["MH"],
+    totalStops: 0,
+    totalDurationMinutes: 150,
+    outboundDurationMinutes: 75,
+    inboundDurationMinutes: 75
+  },
+  "JHB-BKK": {
+    amountMinorMyr: 45_200,
+    carriers: ["AK", "FD"],
+    totalStops: 1,
+    totalDurationMinutes: 360,
+    outboundDurationMinutes: 180,
+    inboundDurationMinutes: 180
+  },
+  "SZB-NRT": {
+    amountMinorMyr: 52_900,
+    carriers: ["D7"],
+    totalStops: 0,
+    totalDurationMinutes: 860,
+    outboundDurationMinutes: 430,
+    inboundDurationMinutes: 430
+  }
+};
+
+function profileKey(input: Pick<SearchRoundTripInput, "originIata" | "destinationIata">): string {
+  return `${input.originIata.toUpperCase()}-${input.destinationIata.toUpperCase()}`;
+}
+
+function fallbackProfile(input: SearchRoundTripInput): MockRouteProfile {
+  const priceSeed = input.originIata.charCodeAt(0) + input.destinationIata.charCodeAt(0);
+  return {
+    amountMinorMyr: (300 + priceSeed) * 100,
+    carriers: ["MH"],
+    totalStops: 0,
+    totalDurationMinutes: 360,
+    outboundDurationMinutes: 180,
+    inboundDurationMinutes: 180
+  };
+}
+
+function mockProfileFor(input: SearchRoundTripInput): MockRouteProfile {
+  return DEMO_ROUTE_PROFILES[profileKey(input)] ?? fallbackProfile(input);
+}
+
 export class MockProvider implements FlightProvider {
   readonly name = "mock";
 
@@ -28,7 +100,9 @@ export class MockProvider implements FlightProvider {
   }
 
   async searchRoundTripOffers(input: SearchRoundTripInput): Promise<ProviderOffer[]> {
-    const priceSeed = input.originIata.charCodeAt(0) + input.destinationIata.charCodeAt(0);
+    const profile = mockProfileFor(input);
+    const outboundCarrier = profile.carriers[0] ?? "MH";
+    const inboundCarrier = profile.carriers[1] ?? outboundCarrier;
     return [
       {
         provider: this.name,
@@ -40,40 +114,40 @@ export class MockProvider implements FlightProvider {
         cabinClass: "economy",
         adultCount: input.adults ?? 1,
         price: {
-          amountMinor: (300 + priceSeed) * 100,
+          amountMinor: profile.amountMinorMyr,
           currency: "MYR"
         },
         itineraries: [
           {
-            durationMinutes: 180,
-            stops: 0,
+            durationMinutes: profile.outboundDurationMinutes,
+            stops: profile.totalStops > 0 ? 1 : 0,
             segments: [
               {
                 originIata: input.originIata,
                 destinationIata: input.destinationIata,
-                durationMinutes: 180,
-                technicalStops: 0,
-                carrierCode: "MH"
+                durationMinutes: profile.outboundDurationMinutes,
+                technicalStops: profile.totalStops > 0 ? 1 : 0,
+                carrierCode: outboundCarrier
               }
             ]
           },
           {
-            durationMinutes: 180,
+            durationMinutes: profile.inboundDurationMinutes,
             stops: 0,
             segments: [
               {
                 originIata: input.destinationIata,
                 destinationIata: input.originIata,
-                durationMinutes: 180,
+                durationMinutes: profile.inboundDurationMinutes,
                 technicalStops: 0,
-                carrierCode: "MH"
+                carrierCode: inboundCarrier
               }
             ]
           }
         ],
-        totalStops: 0,
-        carriers: ["MH"],
-        durationMinutes: 360,
+        totalStops: profile.totalStops,
+        carriers: profile.carriers,
+        durationMinutes: profile.totalDurationMinutes,
         source: "mock",
         lastVerifiedAt: new Date().toISOString(),
         retentionMode: this.getRetentionMode(),
@@ -98,4 +172,3 @@ export class MockProvider implements FlightProvider {
     return offers[0] ?? null;
   }
 }
-

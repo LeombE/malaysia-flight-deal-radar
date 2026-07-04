@@ -137,6 +137,12 @@ const expiredDeal = deal({
   warning: "Expired offer. Do not treat as live fare.",
   is_live: false
 });
+const duplicateLiveDeal = deal({
+  amount_minor_myr: 70_100,
+  display_price_rm: "RM701.00",
+  deal_score: 87,
+  carrier: "AK"
+});
 
 const priceHistory: PriceHistoryApiRecord[] = [
   {
@@ -228,8 +234,10 @@ const priceCalendar: PriceCalendarApiRecord[] = [
 
 class MemoryApiRepository implements ApiRepository {
   private readonly calendarRows: PriceCalendarApiRecord[];
-  constructor(calendarRows: PriceCalendarApiRecord[] = priceCalendar) {
+  private readonly dealRows: DealApiRecord[];
+  constructor(calendarRows: PriceCalendarApiRecord[] = priceCalendar, dealRows: DealApiRecord[] = [staleDeal, liveDeal, expiredDeal]) {
     this.calendarRows = calendarRows;
+    this.dealRows = dealRows;
   }
   lastDestinationFilters: DestinationFilters | null = null;
   lastDealFilters: DealFilters | null = null;
@@ -264,7 +272,7 @@ class MemoryApiRepository implements ApiRepository {
 
   async listDeals(filters: DealFilters): Promise<DealApiRecord[]> {
     this.lastDealFilters = filters;
-    return [staleDeal, liveDeal, expiredDeal]
+    return this.dealRows
       .filter((item) => {
         const destination = destinations.find((candidate) => candidate.iata_code === item.destination);
         if (filters.origin_iata && item.origin !== filters.origin_iata) return false;
@@ -602,6 +610,14 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.match(html, /Last verified/);
   assert.match(html, /2026-06-10 08:00 UTC/);
   assert.match(html, /Alert status/);
+  assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Total demo cards/);
+  assert.match(html, /Strong deals/);
+  assert.match(html, /Suspected deals/);
+  assert.match(html, /Stale \/ revalidate/);
+  assert.match(html, /Mock provider status/);
+  assert.match(html, /<dd>3<\/dd>/);
+  assert.match(html, /<dd>healthy<\/dd>/);
   assert.match(html, /Freshly verified/);
   assert.match(html, /Stale fare\. Revalidate before alert or purchase\./);
   assert.match(html, /Stale \/ needs revalidation/);
@@ -611,6 +627,27 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.equal(html.includes("rawPayload"), false);
 });
 
+test("GET /dashboard uses mock-only summary metrics and dedupes repeated demo cards", async () => {
+  const repository = new MemoryApiRepository(priceCalendar, [liveDeal, duplicateLiveDeal, staleDeal, expiredDeal]);
+  const { request } = app({ repository });
+  const response = await request("/dashboard");
+  const html = await response.text();
+
+  assert.equal(response.status, 200);
+  assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Total demo cards[\s\S]*?<dd>3<\/dd>/);
+  assert.match(html, /Strong deals[\s\S]*?<dd>2<\/dd>/);
+  assert.match(html, /Suspected deals[\s\S]*?<dd>1<\/dd>/);
+  assert.match(html, /Stale \/ revalidate[\s\S]*?<dd>1<\/dd>/);
+  assert.match(html, /Mock provider status[\s\S]*?<dd>healthy<\/dd>/);
+  assert.equal((html.match(/KUL to BKK/g) ?? []).length, 1);
+  assert.equal(html.includes("RM701.00"), false);
+  assert.equal(/live fare coverage/i.test(html), false);
+  assert.equal(/booking|payment|passenger storage|ticket issuance/i.test(html), false);
+  assert.equal(html.includes("revalidationPayload"), false);
+  assert.equal(html.includes("rawPayload"), false);
+  assert.equal(html.includes("ADMIN_TOKEN"), false);
+});
 test("GET /calendar renders cached fare warning labels and filters", async () => {
   const { request } = app();
   const response = await request("/calendar?destination_region=Taiwan&destination_iata=TPE");

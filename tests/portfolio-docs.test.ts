@@ -215,7 +215,15 @@ test("screenshot guide includes Phase 8F reviewer evidence checklist", () => {
     "Demo data only view",
     "API provider filter response",
     "Local D1 import verification",
-    "Provider readiness safe state"
+    "Provider readiness safe state",
+    "Phase 8I Dashboard Demo Screenshot Polish",
+    "Remote demo uses controlled mock data only. Prices are not live and must be rechecked.",
+    "Summary metrics",
+    "total demo cards",
+    "strong deals",
+    "suspected deals",
+    "stale/revalidate count",
+    "mock provider status"
   ]) {
     assert.match(screenshots, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }

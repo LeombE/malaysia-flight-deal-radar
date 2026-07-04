@@ -37,8 +37,16 @@ test("local demo dashboard renders seeded deal HTML", async () => {
 
   assert.equal(response.status, 200);
   assert.match(html, /Malaysia Flight Deal Radar/);
+  assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Total demo cards/);
+  assert.match(html, /Strong deals/);
+  assert.match(html, /Suspected deals/);
+  assert.match(html, /Stale \/ revalidate/);
+  assert.match(html, /Mock provider status/);
   assert.match(html, /KUL/);
   assert.match(html, /BKK/);
+  assert.match(html, /2026-08-02/);
+  assert.match(html, /2026-09-03/);
   assert.match(html, /RM/);
 });
 
@@ -48,8 +56,17 @@ test("local demo /api/deals returns no_deal, suspected_deal, and strong_deal exa
   const body = await json<{ deals: DealApiRecord[] }>(response);
   const labels = new Set(body.deals.map((deal) => deal.deal_label));
 
+  const routeKeys = new Set(body.deals.map((deal) => `${deal.origin}-${deal.destination}`));
+  const departureDates = new Set(body.deals.map((deal) => deal.departure_date));
+  const stayLengths = new Set(body.deals.map((deal) => deal.stay_length_days));
+  const carriers = new Set(body.deals.map((deal) => deal.carrier));
+
   assert.equal(response.status, 200);
   assert.ok(body.deals.length >= 5);
+  assert.equal(routeKeys.size >= 4, true);
+  assert.equal(departureDates.size >= 3, true);
+  assert.equal(stayLengths.size >= 3, true);
+  assert.equal(carriers.size > 1, true);
   assert.equal(labels.has("no_deal"), true);
   assert.equal(labels.has("suspected_deal"), true);
   assert.equal(labels.has("strong_deal"), true);
@@ -79,6 +96,8 @@ test("local demo dashboard includes polished freshness labels and no raw provide
   assert.match(html, /Deal label/);
   assert.match(html, /Provider/);
   assert.match(html, /Freshly verified/);
+  assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Mock provider status/);
   assert.match(html, /name="min_score" value="0"/);
   assert.match(html, /<option value="strong_deal" selected>/);
   assert.equal(html.includes("revalidationPayload"), false);

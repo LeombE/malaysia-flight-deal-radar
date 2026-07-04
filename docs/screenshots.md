@@ -41,6 +41,18 @@ Do not commit screenshots unless they are intentionally reviewed and contain no 
    - Show mock healthy and real/cached providers disabled, dry-run protected, or blocked by missing credentials.
    - Confirm Travelpayouts remains disabled on Cloudflare.
 
+
+## Phase 8I Dashboard Demo Screenshot Polish
+
+Use the deployed `/dashboard` page for portfolio dashboard screenshots after the remote mock demo has been reset and scanned. The dashboard should clearly show varied mock/demo cards across routes, dates, stay lengths, prices, carriers, labels, and last verified timestamps.
+
+Required visible evidence:
+
+- Banner text: `Remote demo uses controlled mock data only. Prices are not live and must be rechecked.`
+- Summary metrics: total demo cards, strong deals, suspected deals, stale/revalidate count, and mock provider status.
+- At least one `strong_deal` and one `suspected_deal` card from controlled mock/demo data.
+- Captions must say the remote dashboard uses controlled mock/demo data only, does not claim live fare coverage, and does not support booking, payment, ticket issuance, or passenger storage.
+
 ## Existing Deployment Screenshots
 
 1. Dashboard with deal cards
