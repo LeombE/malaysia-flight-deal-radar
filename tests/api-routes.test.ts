@@ -14,7 +14,8 @@ import type {
   PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
-  ProviderLimitApiRecord
+  ProviderLimitApiRecord,
+  WatchlistRouteApiRecord
 } from "../src/routes/api-types.ts";
 import type { ScanRunResult } from "../src/scanner/types.ts";
 
@@ -196,8 +197,8 @@ const priceCalendar: PriceCalendarApiRecord[] = [
     is_bookable_claim: false,
     search_link: "https://www.aviasales.com/search/KUL260725TPE2607301",
     warning: "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.",
-    deal_label: null,
-    deal_score: null
+    deal_label: "suspected_deal",
+    deal_score: 71
   },
   {
     origin_iata: "KUL",
@@ -227,8 +228,33 @@ const priceCalendar: PriceCalendarApiRecord[] = [
     is_bookable_claim: false,
     search_link: null,
     warning: "Cached fare from recent searches. Recheck before purchase. Not guaranteed live. Price may have changed.",
-    deal_label: null,
-    deal_score: null
+    deal_label: "strong_deal",
+    deal_score: 90
+  }
+];
+
+const watchlistRoutes: WatchlistRouteApiRecord[] = [
+  {
+    origin_iata: "KUL",
+    destination_iata: "BKK",
+    destination_city: "Bangkok",
+    destination_country: "TH",
+    destination_region: "SOUTHEAST_ASIA",
+    departure_date: "2026-07-25",
+    return_date: "2026-07-30",
+    stay_length_days: 5,
+    max_amount_minor_myr: 50_000
+  },
+  {
+    origin_iata: "SZB",
+    destination_iata: "NRT",
+    destination_city: "Tokyo",
+    destination_country: "JP",
+    destination_region: "EAST_ASIA",
+    departure_date: "2026-09-01",
+    return_date: "2026-09-06",
+    stay_length_days: 5,
+    max_amount_minor_myr: null
   }
 ];
 
@@ -311,6 +337,10 @@ class MemoryApiRepository implements ApiRepository {
         return true;
       })
       .sort((left, right) => (left.amount_minor_myr ?? 9999999) - (right.amount_minor_myr ?? 9999999));
+  }
+
+  async listDashboardWatchlistRoutes(): Promise<WatchlistRouteApiRecord[]> {
+    return watchlistRoutes;
   }
 
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {
@@ -515,11 +545,11 @@ test("GET /api/price-calendar and /calendar can render imported Travelpayouts ro
 
   assert.equal(page.status, 200);
   assert.match(html, /Travelpayouts cached/);
-  assert.match(html, /Real cached data/);
+  assert.match(html, /Cached import row/);
   assert.match(html, /provider_name=travelpayouts/);
   assert.match(html, /is_live=false; is_bookable_claim=false/);
   assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
-  assert.match(html, /Generic links may not preserve this fare\./);
+  assert.match(html, /Generic search\/recheck links may not preserve this fare; verify price, dates, airline, baggage, and availability\./);
   assert.equal(html.includes("rawPayload"), false);
   assert.equal(html.includes("TRAVELPAYOUTS_TOKEN"), false);
 });
@@ -611,6 +641,7 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.match(html, /2026-06-10 08:00 UTC/);
   assert.match(html, /Alert status/);
   assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Demo dates come from a fixed mock snapshot\. Route dates are demo travel dates, not current availability\./);
   assert.match(html, /Total demo cards/);
   assert.match(html, /Strong deals/);
   assert.match(html, /Suspected deals/);
@@ -618,11 +649,22 @@ test("GET /dashboard renders filters, deal cards, prices, provider, and stale wa
   assert.match(html, /Mock provider status/);
   assert.match(html, /<dd>3<\/dd>/);
   assert.match(html, /<dd>healthy<\/dd>/);
-  assert.match(html, /Freshly verified/);
+  assert.match(html, /Decision support/);
+  assert.match(html, /where to fly, when to fly, why a mock deal looks interesting, and what must be rechecked/);
+  assert.match(html, /Top recommended demo deals/);
+  assert.match(html, /Cheapest route by region/);
+  assert.match(html, /Strongest discount/);
+  assert.match(html, /Stale \/ recheck queue/);
+  assert.match(html, /Watchlist routes/);
+  assert.match(html, /KUL to BKK/);
+  assert.match(html, /Target RM500\.00/);
+  assert.match(html, /Why this deal:/);
+  assert.match(html, /Score 88, 30\.03% below the route baseline median RM999\.00/);
+  assert.match(html, /Demo recently checked/);
   assert.match(html, /Stale fare\. Revalidate before alert or purchase\./);
   assert.match(html, /Stale \/ needs revalidation/);
   assert.match(html, /Expired offer\. Do not treat as live fare\./);
-  assert.match(html, /Expired/);
+  assert.match(html, /Expired demo row/);
   assert.equal(html.includes("revalidationPayload"), false);
   assert.equal(html.includes("rawPayload"), false);
 });
@@ -640,7 +682,11 @@ test("GET /dashboard uses mock-only summary metrics and dedupes repeated demo ca
   assert.match(html, /Suspected deals[\s\S]*?<dd>1<\/dd>/);
   assert.match(html, /Stale \/ revalidate[\s\S]*?<dd>1<\/dd>/);
   assert.match(html, /Mock provider status[\s\S]*?<dd>healthy<\/dd>/);
-  assert.equal((html.match(/KUL to BKK/g) ?? []).length, 1);
+  assert.equal((html.match(/<h2>KUL to BKK<\/h2>/g) ?? []).length, 1);
+  assert.match(html, /Top recommended demo deals/);
+  assert.match(html, /Cheapest route by region/);
+  assert.match(html, /Strongest discount/);
+  assert.match(html, /Watchlist routes/);
   assert.equal(html.includes("RM701.00"), false);
   assert.equal(/live fare coverage/i.test(html), false);
   assert.equal(/booking|payment|passenger storage|ticket issuance/i.test(html), false);
@@ -658,7 +704,11 @@ test("GET /calendar renders cached fare warning labels and filters", async () =>
   assert.match(html, /Cached fare from recent searches\. Recheck before purchase\./);
   assert.match(html, /Not guaranteed live/);
   assert.match(html, /Price may have changed/);
-  assert.match(html, /Cached fare data only\. Not live\. Recheck before purchase\. Prices may have changed\./);
+  assert.match(html, /Cached fare data only\. Not live\. Recheck before purchase\. Prices may have changed\. Demo travel dates come from a fixed mock snapshot\./);
+  assert.match(html, /Freshness legend/);
+  assert.match(html, /Provider legend/);
+  assert.match(html, /cached\/demo freshness label, not a live guarantee/i);
+  assert.match(html, /travelpayouts_demo<\/strong> is controlled demo seed data/);
   assert.match(html, /name="destination_region"/);
   assert.match(html, /name="destination_iata"/);
   assert.match(html, /name="provider_name"/);
@@ -670,6 +720,12 @@ test("GET /calendar renders cached fare warning labels and filters", async () =>
   assert.match(html, /RM459\.00/);
   assert.match(html, /Demo seed data/);
   assert.match(html, /provider_name=travelpayouts_demo/);
+  assert.match(html, /Cheapest in current table/);
+  assert.match(html, /suspected_deal/);
+  assert.match(html, /Best score 71/);
+  assert.match(html, /Generic search\/recheck links may not preserve this fare; verify price, dates, airline, baggage, and availability\./);
+  assert.equal(/live fare coverage/i.test(html), false);
+  assert.equal(/booking|payment|passenger storage|ticket issuance/i.test(html), false);
   assert.equal(html.includes("rawPayload"), false);
 });
 

@@ -51,7 +51,7 @@ Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayo
 Capture these for a reviewer packet:
 
 1. All providers view showing the price calendar provider dropdown and source badges.
-2. Travelpayouts cached only local view showing `Travelpayouts cached`, `Real cached data`, `provider_name=travelpayouts`, `is_live=false`, and `is_bookable_claim=false`.
+2. Travelpayouts cached only local view showing `Travelpayouts cached`, `Cached import row`, `provider_name=travelpayouts`, `is_live=false`, and `is_bookable_claim=false`.
 3. Demo data only view showing `Demo data`, `Demo seed data`, and `provider_name=travelpayouts_demo`.
 4. API provider-filter response for `provider_name=travelpayouts` and `provider_name=travelpayouts_demo`.
 5. `npm run travelpayouts:import:verify:local` result showing local D1 provider/freshness counts and top cached prices.

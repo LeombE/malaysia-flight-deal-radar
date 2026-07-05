@@ -68,7 +68,7 @@ The current deterministic demo scan should show a mix close to:
 - `suspected_deal`
 - `no_deal`
 
-Dashboard cards show `Freshly verified`, `Stale / needs revalidation`, or `Expired` when those states are present. Stale or expired records are shown only as warning/context, not as live fares.
+Dashboard cards show `Demo recently checked`, `Stale / needs revalidation`, or `Expired demo row` when those states are present. Stale or expired records are shown only as warning/context, not as live fares. Phase 8J also adds `Why this deal` decision-support text based on mock score, discount, baseline median, historical p10, stops, and recheck status.
 
 This makes `/api/deals` and `/dashboard` useful immediately.
 

@@ -18,7 +18,7 @@ Do not commit screenshots unless they are intentionally reviewed and contain no 
 
 2. Travelpayouts cached only view
    - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts&destination_iata=BKK`.
-   - Show `Travelpayouts cached`, `Real cached data`, `provider_name=travelpayouts`, `is_live=false`, `is_bookable_claim=false`, and recheck warning text.
+   - Show `Travelpayouts cached`, `Cached import row`, `provider_name=travelpayouts`, `is_live=false`, `is_bookable_claim=false`, and recheck warning text.
 
 3. Demo data only view
    - Capture `http://127.0.0.1:8787/calendar?provider_name=travelpayouts_demo&destination_iata=BKK`.
@@ -52,6 +52,27 @@ Required visible evidence:
 - Summary metrics: total demo cards, strong deals, suspected deals, stale/revalidate count, and mock provider status.
 - At least one `strong_deal` and one `suspected_deal` card from controlled mock/demo data.
 - Captions must say the remote dashboard uses controlled mock/demo data only, does not claim live fare coverage, and does not support booking, payment, ticket issuance, or passenger storage.
+
+## Phase 8J Decision UX Screenshot Checklist
+
+Use the deployed `/dashboard` and `/calendar` pages as remote mock/demo evidence only. Do not run `cf:dev` for Phase 8J remote screenshots unless you are separately capturing local D1 evidence.
+
+Dashboard required visible evidence:
+
+- Banner text: `Remote demo uses controlled mock data only. Prices are not live and must be rechecked.`
+- Fixed snapshot note: `Demo dates come from a fixed mock snapshot. Route dates are demo travel dates, not current availability.`
+- Decision support sections: `Top recommended demo deals`, `Cheapest route by region`, `Strongest discount`, `Stale / recheck queue`, and `Watchlist routes`.
+- Card explanation label: `Why this deal`, based on mock score, discount, baseline median, historical p10, stops, and recheck status.
+- Captions must say the dashboard is decision support for controlled mock/demo data, not live fare coverage.
+
+Calendar required visible evidence:
+
+- `Freshness legend` explaining that freshness labels are cached/demo freshness labels, not a live guarantee.
+- `Provider legend` explaining `travelpayouts_demo` as controlled demo seed data and `travelpayouts` as a local cached import row when present.
+- `Cheapest in current table` badge on the lowest visible row.
+- `Best score` or deal-label badge when score/label data is available.
+- Recheck text: `Generic search/recheck links may not preserve this fare; verify price, dates, airline, baggage, and availability.`
+- Captions must say the calendar is a table explorer for cached/demo discovery records, not live or bookable inventory.
 
 ## Existing Deployment Screenshots
 

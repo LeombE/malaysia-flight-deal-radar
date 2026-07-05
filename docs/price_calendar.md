@@ -51,7 +51,10 @@ Provider filters:
 - "Cached fare from recent searches. Recheck before purchase."
 - "Not guaranteed live."
 - "Price may have changed."
-- a source badge: "Real cached data" for `travelpayouts` or "Demo seed data" for `travelpayouts_demo`
+- a source badge: "Cached import row" for `travelpayouts` or "Demo seed data" for `travelpayouts_demo`
+- freshness/provider legends explaining that freshness labels are cached/demo labels, not a live guarantee
+- `Cheapest in current table` and score/deal badges when those fields are available
+- recheck wording that generic search/recheck links may not preserve the fare and that users must verify price, dates, airline, baggage, and availability
 
 ## Data Safety
 

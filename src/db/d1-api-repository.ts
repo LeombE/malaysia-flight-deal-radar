@@ -9,7 +9,8 @@ import type {
   PriceCalendarFilters,
   PriceHistoryApiRecord,
   PriceHistoryFilters,
-  ProviderLimitApiRecord
+  ProviderLimitApiRecord,
+  WatchlistRouteApiRecord
 } from "../routes/api-types.ts";
 import type { D1DatabaseLike } from "./d1-scan-repository.ts";
 
@@ -94,6 +95,18 @@ interface ProviderLimitRow {
   last_success_at: string | null;
   last_failure_at: string | null;
   failure_count: number | null;
+}
+
+interface WatchlistRow {
+  origin_iata: string;
+  destination_iata: string;
+  destination_city: string;
+  destination_country: string;
+  destination_region: string;
+  departure_date: string | null;
+  return_date: string | null;
+  stay_length_days: number | null;
+  max_amount_minor_myr: number | null;
 }
 
 function mapAirport(row: AirportRow): AirportApiRecord {
@@ -509,6 +522,38 @@ export class D1ApiRepository implements ApiRepository {
     `).bind(...params).all<PriceCalendarRow>();
 
     return (result.results ?? []).map((row) => mapPriceCalendarRow(row, now));
+  }
+
+  async listDashboardWatchlistRoutes(): Promise<WatchlistRouteApiRecord[]> {
+    const result = await this.db.prepare(`
+      SELECT
+        w.origin_iata,
+        w.destination_iata,
+        a.city AS destination_city,
+        a.country_code AS destination_country,
+        a.region_group AS destination_region,
+        w.departure_date,
+        w.return_date,
+        w.stay_length_days,
+        w.max_amount_minor_myr
+      FROM watchlist w
+      JOIN airports a ON a.iata_code = w.destination_iata
+      WHERE w.active = 1
+      ORDER BY w.created_at ASC, w.origin_iata ASC, w.destination_iata ASC
+      LIMIT 20
+    `).all<WatchlistRow>();
+
+    return (result.results ?? []).map((row) => ({
+      origin_iata: row.origin_iata,
+      destination_iata: row.destination_iata,
+      destination_city: row.destination_city,
+      destination_country: row.destination_country,
+      destination_region: row.destination_region,
+      departure_date: row.departure_date,
+      return_date: row.return_date,
+      stay_length_days: row.stay_length_days,
+      max_amount_minor_myr: row.max_amount_minor_myr
+    }));
   }
 
   async listProviderLimits(): Promise<ProviderLimitApiRecord[]> {

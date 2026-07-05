@@ -134,6 +134,18 @@ export interface PriceCalendarApiRecord {
   deal_score: number | null;
 }
 
+export interface WatchlistRouteApiRecord {
+  origin_iata: string;
+  destination_iata: string;
+  destination_city: string;
+  destination_country: string;
+  destination_region: string;
+  departure_date: string | null;
+  return_date: string | null;
+  stay_length_days: number | null;
+  max_amount_minor_myr: number | null;
+}
+
 export interface ProviderLimitApiRecord {
   provider_name: string;
   retention_mode: string;
@@ -161,5 +173,6 @@ export interface ApiRepository {
   listDeals(filters: DealFilters, now: Date, freshWithinMinutes: number): Promise<DealApiRecord[]>;
   listPriceHistory(filters: PriceHistoryFilters): Promise<PriceHistoryApiRecord[]>;
   listPriceCalendar(filters: PriceCalendarFilters, now: Date): Promise<PriceCalendarApiRecord[]>;
+  listDashboardWatchlistRoutes?(): Promise<WatchlistRouteApiRecord[]>;
   listProviderLimits(): Promise<ProviderLimitApiRecord[]>;
 }

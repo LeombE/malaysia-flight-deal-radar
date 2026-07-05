@@ -64,6 +64,9 @@ test("README includes required portfolio sections and verified deployment eviden
   assert.match(readme, /does not contain real Travelpayouts imported rows/);
   assert.match(readme, /Travelpayouts remains disabled on Cloudflare/);
   assert.match(readme, /no Travelpayouts token is configured remotely/i);
+  assert.match(readme, /Phase 8J improves dashboard and calendar decision support without enabling real providers/);
+  assert.match(readme, /demo travel dates come from a fixed mock snapshot/i);
+  assert.match(readme, /freshness labels are cached\/demo freshness labels, not a live guarantee/i);
 });
 
 test("portfolio docs honestly describe mock demo status and avoid live coverage claims", () => {
@@ -223,7 +226,21 @@ test("screenshot guide includes Phase 8F reviewer evidence checklist", () => {
     "strong deals",
     "suspected deals",
     "stale/revalidate count",
-    "mock provider status"
+    "mock provider status",
+    "Phase 8J Decision UX Screenshot Checklist",
+    "Top recommended demo deals",
+    "Cheapest route by region",
+    "Strongest discount",
+    "Stale / recheck queue",
+    "Watchlist routes",
+    "Why this deal",
+    "Freshness legend",
+    "Provider legend",
+    "Cheapest in current table",
+    "Best score",
+    "Generic search/recheck links may not preserve this fare; verify price, dates, airline, baggage, and availability.",
+    "Cached import row",
+    "Demo dates come from a fixed mock snapshot. Route dates are demo travel dates, not current availability."
   ]) {
     assert.match(screenshots, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }

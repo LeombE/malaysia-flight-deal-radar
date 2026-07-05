@@ -95,8 +95,12 @@ test("local demo dashboard includes polished freshness labels and no raw provide
   assert.match(html, /Last verified/);
   assert.match(html, /Deal label/);
   assert.match(html, /Provider/);
-  assert.match(html, /Freshly verified/);
+  assert.match(html, /Demo recently checked/);
   assert.match(html, /Remote demo uses controlled mock data only\. Prices are not live and must be rechecked\./);
+  assert.match(html, /Demo dates come from a fixed mock snapshot\. Route dates are demo travel dates, not current availability\./);
+  assert.match(html, /Decision support/);
+  assert.match(html, /Top recommended demo deals/);
+  assert.match(html, /Why this deal:/);
   assert.match(html, /Mock provider status/);
   assert.match(html, /name="min_score" value="0"/);
   assert.match(html, /<option value="strong_deal" selected>/);

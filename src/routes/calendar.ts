@@ -14,6 +14,11 @@ export interface CalendarModel {
   generatedAt: string;
 }
 
+interface CalendarBadges {
+  cheapestKeys: Set<string>;
+  bestScoreKeys: Set<string>;
+}
+
 function escapeHtml(value: string | number | null | undefined): string {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -63,14 +68,57 @@ function freshnessClass(value: PriceCalendarFreshnessLabel): string {
   return "fresh";
 }
 
-function providerDisplay(providerName: string): { label: string; badge: string; badgeClass: string } {
+function providerDisplay(providerName: string): { label: string; badge: string; badgeClass: string; explanation: string } {
   if (providerName === "travelpayouts") {
-    return { label: "Travelpayouts cached", badge: "Real cached data", badgeClass: "real" };
+    return {
+      label: "Travelpayouts cached",
+      badge: "Cached import row",
+      badgeClass: "imported",
+      explanation: "local cached import row; not live or bookable inventory"
+    };
   }
   if (providerName === "travelpayouts_demo") {
-    return { label: "Demo data", badge: "Demo seed data", badgeClass: "demo" };
+    return {
+      label: "Demo data",
+      badge: "Demo seed data",
+      badgeClass: "demo",
+      explanation: "controlled demo seed; not live or bookable inventory"
+    };
   }
-  return { label: providerName, badge: "Cached data", badgeClass: "cached-source" };
+  return {
+    label: providerName,
+    badge: "Cached data",
+    badgeClass: "cached-source",
+    explanation: "cached discovery row; recheck before use"
+  };
+}
+
+function rowKey(row: PriceCalendarApiRecord): string {
+  return [
+    row.provider_name,
+    row.origin_iata,
+    row.destination_iata,
+    row.departure_date,
+    row.return_date,
+    row.display_price_rm,
+    row.flight_number ?? ""
+  ].join("|");
+}
+
+function calendarBadges(rows: PriceCalendarApiRecord[]): CalendarBadges {
+  const pricedRows = rows.filter((row) => row.amount_minor_myr !== null);
+  const cheapest = pricedRows.reduce<number | null>((current, row) => {
+    if (row.amount_minor_myr === null) return current;
+    return current === null ? row.amount_minor_myr : Math.min(current, row.amount_minor_myr);
+  }, null);
+  const bestScore = rows.reduce<number | null>((current, row) => {
+    if (row.deal_score === null) return current;
+    return current === null ? row.deal_score : Math.max(current, row.deal_score);
+  }, null);
+  return {
+    cheapestKeys: new Set(rows.filter((row) => row.amount_minor_myr !== null && row.amount_minor_myr === cheapest).map(rowKey)),
+    bestScoreKeys: new Set(rows.filter((row) => row.deal_score !== null && row.deal_score === bestScore).map(rowKey))
+  };
 }
 
 function renderSearchLink(row: PriceCalendarApiRecord): string {
@@ -78,24 +126,56 @@ function renderSearchLink(row: PriceCalendarApiRecord): string {
   return `<a href="${escapeHtml(row.search_link)}" rel="nofollow noopener noreferrer">Search/recheck</a>`;
 }
 
-function renderRow(row: PriceCalendarApiRecord): string {
+function renderRowBadges(row: PriceCalendarApiRecord, badges: CalendarBadges): string {
+  const rowKeyValue = rowKey(row);
+  const parts: string[] = [];
+  if (badges.cheapestKeys.has(rowKeyValue)) {
+    parts.push(`<span class="row-badge cheapest">Cheapest in current table</span>`);
+  }
+  if (row.deal_label) {
+    parts.push(`<span class="row-badge deal">${escapeHtml(row.deal_label)}</span>`);
+  }
+  if (badges.bestScoreKeys.has(rowKeyValue) && row.deal_score !== null) {
+    parts.push(`<span class="row-badge score">Best score ${escapeHtml(row.deal_score)}</span>`);
+  } else if (row.deal_score !== null) {
+    parts.push(`<span class="row-badge score">Score ${escapeHtml(row.deal_score)}</span>`);
+  }
+  return parts.join("");
+}
+
+function renderRow(row: PriceCalendarApiRecord, badges: CalendarBadges): string {
   const provider = providerDisplay(row.provider_name);
   return `
     <tr class="${freshnessClass(row.freshness_label)}">
-      <td><strong>${escapeHtml(row.origin_iata)} -> ${escapeHtml(row.destination_iata)}</strong><span>${escapeHtml(regionLabel(row.destination_region))}</span></td>
+      <td><strong>${escapeHtml(row.origin_iata)} -> ${escapeHtml(row.destination_iata)}</strong><span>${escapeHtml(regionLabel(row.destination_region))}</span>${renderRowBadges(row, badges)}</td>
       <td>${escapeHtml(row.departure_date)}</td>
       <td>${escapeHtml(row.return_date)}</td>
       <td>${escapeHtml(row.stay_length_days)}</td>
       <td><strong>${escapeHtml(row.display_price_rm)}</strong><span>${escapeHtml(row.original_amount)} ${escapeHtml(row.original_currency)}</span></td>
       <td>${escapeHtml(row.airline_iata ?? "Unknown")}<span>${escapeHtml(row.flight_number ?? "")}</span></td>
       <td>${escapeHtml(row.stops ?? "Unknown")}</td>
-      <td><strong>${escapeHtml(provider.label)}</strong><span class="source-badge ${escapeHtml(provider.badgeClass)}">${escapeHtml(provider.badge)}</span><span>provider_name=${escapeHtml(row.provider_name)}</span><span>${escapeHtml(row.source_endpoint)}</span><span class="source-flags">is_live=false; is_bookable_claim=false</span></td>
+      <td><strong>${escapeHtml(provider.label)}</strong><span class="source-badge ${escapeHtml(provider.badgeClass)}">${escapeHtml(provider.badge)}</span><span>${escapeHtml(provider.explanation)}</span><span>provider_name=${escapeHtml(row.provider_name)}</span><span>${escapeHtml(row.source_endpoint)}</span><span class="source-flags">is_live=false; is_bookable_claim=false</span></td>
       <td>${escapeHtml(formatUtc(row.retrieved_at))}</td>
       <td>${escapeHtml(formatUtc(row.expires_at))}</td>
-      <td><span class="pill ${freshnessClass(row.freshness_label)}">${escapeHtml(row.freshness_label)}</span></td>
+      <td><span class="pill ${freshnessClass(row.freshness_label)}">${escapeHtml(row.freshness_label)}</span><span>Cached/demo freshness label, not a live guarantee.</span></td>
       <td>${escapeHtml(row.warning)}</td>
-      <td>${renderSearchLink(row)}<span>Generic links may not preserve this fare.</span></td>
+      <td>${renderSearchLink(row)}<span>Generic search/recheck links may not preserve this fare; verify price, dates, airline, baggage, and availability.</span></td>
     </tr>
+  `;
+}
+
+function renderLegends(): string {
+  return `
+    <section class="legend-grid" aria-label="Calendar legends">
+      <div class="legend-panel">
+        <h2>Freshness legend</h2>
+        <p><strong>fresh</strong> means the cached/demo row was found recently in its source context; <strong>recent</strong> and <strong>cached</strong> are older discovery labels; <strong>expired</strong> is hidden unless requested. These labels are not a live guarantee.</p>
+      </div>
+      <div class="legend-panel">
+        <h2>Provider legend</h2>
+        <p><strong>travelpayouts_demo</strong> is controlled demo seed data. <strong>travelpayouts</strong> is a local cached import row when present. Both are discovery records, not live or bookable inventory.</p>
+      </div>
+    </section>
   `;
 }
 
@@ -108,8 +188,9 @@ export function renderCalendarHtml(model: CalendarModel): string {
     { value: "travelpayouts", label: "Travelpayouts cached" },
     { value: "travelpayouts_demo", label: "Demo data" }
   ];
+  const badges = calendarBadges(model.rows);
   const rowsMarkup = model.rows.length > 0
-    ? model.rows.map(renderRow).join("")
+    ? model.rows.map((row) => renderRow(row, badges)).join("")
     : `<tr><td colspan="13" class="empty">No matching calendar fares yet.</td></tr>`;
 
   return `<!doctype html>
@@ -146,6 +227,7 @@ export function renderCalendarHtml(model: CalendarModel): string {
       border-bottom: 1px solid var(--line);
     }
     h1 { margin: 0 0 4px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 6px; font-size: 16px; letter-spacing: 0; }
     header p { margin: 0; color: var(--muted); }
     .banner {
       margin: 14px 0 0;
@@ -156,6 +238,19 @@ export function renderCalendarHtml(model: CalendarModel): string {
       background: var(--warn-bg);
       color: var(--warn);
     }
+    .legend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .legend-panel {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .legend-panel p { margin: 0; color: var(--muted); }
     form {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -187,7 +282,7 @@ export function renderCalendarHtml(model: CalendarModel): string {
     }
     table {
       width: 100%;
-      min-width: 1120px;
+      min-width: 1220px;
       border-collapse: collapse;
     }
     th, td {
@@ -199,17 +294,24 @@ export function renderCalendarHtml(model: CalendarModel): string {
     }
     th { background: #f7fafb; color: var(--muted); font-size: 12px; }
     td span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; }
-    .pill {
+    .pill, .row-badge {
       display: inline-block;
+      width: fit-content;
       margin: 0;
       padding: 3px 7px;
       border-radius: 999px;
       border: 1px solid var(--line);
       color: var(--accent);
+      background: #fff;
+      font-size: 12px;
     }
     .pill.recent { color: var(--recent); }
     .pill.cached { color: var(--cached); }
     .pill.expired { color: var(--expired); }
+    .row-badge { display: block; margin-top: 5px; }
+    .row-badge.cheapest { color: var(--accent); border-color: var(--accent); background: #ecf8f8; }
+    .row-badge.deal { color: var(--warn); border-color: var(--warn); background: var(--warn-bg); }
+    .row-badge.score { color: var(--cached); border-color: var(--cached); background: #f5f1f7; }
     .source-badge {
       display: inline-block;
       width: fit-content;
@@ -221,7 +323,7 @@ export function renderCalendarHtml(model: CalendarModel): string {
       background: #f7fafb;
       font-size: 12px;
     }
-    .source-badge.real { color: var(--accent); border-color: var(--accent); background: #ecf8f8; }
+    .source-badge.imported { color: var(--accent); border-color: var(--accent); background: #ecf8f8; }
     .source-badge.demo { color: var(--cached); border-color: var(--cached); background: #f5f1f7; }
     .source-flags { color: var(--warn); }
     tr.expired { opacity: 0.7; }
@@ -232,10 +334,11 @@ export function renderCalendarHtml(model: CalendarModel): string {
 <body>
   <header>
     <h1>KUL Asia Price Calendar</h1>
-    <p>Generated ${escapeHtml(formatUtc(model.generatedAt))}. Rows are cached or recently found fares, sorted by low RM price.</p>
-    <div class="banner">Cached fare data only. Not live. Recheck before purchase. Prices may have changed.</div>
+    <p>Generated ${escapeHtml(formatUtc(model.generatedAt))}. Rows are cached or recently found demo fares, sorted by low RM price.</p>
+    <div class="banner">Cached fare data only. Not live. Recheck before purchase. Prices may have changed. Demo travel dates come from a fixed mock snapshot.</div>
   </header>
   <main>
+    ${renderLegends()}
     <form method="get" action="/calendar">
       <label>Origin
         <select name="origin_iata">

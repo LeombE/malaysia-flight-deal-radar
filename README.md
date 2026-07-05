@@ -7,7 +7,7 @@ Price calendar: https://malaysia-flight-deal-radar-demo.spaceleoch-flight-radar.
 
 ## Project Summary
 
-Malaysia Flight Deal Radar helps Malaysia-based travelers watch routes from `JHB`, `KUL`, and `SZB` to selected Asia destinations. The deployed demo currently uses controlled mock fare data, and Phase 8B adds a KUL Asia Price Calendar for recently found cached fares.
+Malaysia Flight Deal Radar helps Malaysia-based travelers watch routes from `JHB`, `KUL`, and `SZB` to selected Asia destinations. The deployed demo currently uses controlled mock fare data, and Phase 8J improves dashboard and calendar decision support without enabling real providers.
 
 This is not a booking engine. It does not implement checkout, payment, ticket issuance, order creation, passenger identity storage, or passport handling.
 
@@ -44,8 +44,8 @@ Current deployed mock/demo status:
 - `/api/provider-health` works
 - `/api/deals` works
 - `/api/price-calendar` works locally with controlled cached fare rows
-- `/dashboard` works
-- `/calendar` renders a KUL Asia Price Calendar
+- `/dashboard` works and includes decision-support sections for recommended demo deals, cheapest route by region, strongest discount, stale/recheck queue, and watchlist routes
+- `/calendar` renders a KUL Asia Price Calendar with freshness/provider legends, cheapest-date badges, best-score/deal badges when available, and clearer recheck wording
 - `strong_deal` count = 2
 - `suspected_deal` count = 2
 - `no_deal` count = 5
@@ -96,6 +96,9 @@ Start-Process "http://127.0.0.1:8787/api/price-calendar?provider_name=travelpayo
 Safety evidence to highlight:
 
 - cached prices are recently found data and must be rechecked before purchase
+- Phase 8J dashboard cards include `Why this deal` explanations based on mock score, discount, baseline median, historical p10, stops, and recheck status
+- Phase 8J calendar legends explain that freshness labels are cached/demo freshness labels, not a live guarantee
+- demo travel dates come from a fixed mock snapshot; route dates are demo travel dates, not current availability
 - `is_live=false` and `is_bookable_claim=false` remain visible in API/UI evidence
 - no booking, checkout, payment, ticketing, passenger identity, or passport storage exists
 - no raw provider payloads or secrets are exposed in committed docs, APIs, health checks, or reports
@@ -110,7 +113,7 @@ More detail: `docs/portfolio_evidence.md` and `docs/screenshots.md`.
 - provider abstraction with guarded Duffel sandbox adapter and optional Amadeus fallback scaffold
 - Travelpayouts cached fare provider scaffold for recently found fares, disabled by default
 - Skyscanner access-preparation documentation without implementation or credentials
-- KUL Asia Price Calendar with low-to-high RM sorting and cached/live warnings
+- KUL Asia Price Calendar with low-to-high RM sorting, freshness/provider legends, and cached/recheck warnings
 - median/p10-based deal scoring using integer MYR minor units
 - stale, expired, and revalidation-aware display logic
 - scheduled scan runner with route priority and provider budget controls
@@ -256,8 +259,9 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - provider access, rate limits, retention rights, and display rights still need final verification before activation
 - Skyscanner is documentation-only preparation; no adapter, credential, API call, or provider-health entry exists
 - Telegram on Cloudflare is implemented but not the focus of the deployed demo evidence
-- dashboard is intentionally minimal and operational, not a consumer product UI
+- dashboard is still server-rendered and mock/demo-safe, with decision-support sections for portfolio review rather than consumer booking workflows
 - historical baselines are controlled demo data until a real provider is enabled
+- fixed demo snapshot dates can look old over time; they are retained for deterministic remote demo evidence and documented as demo travel dates
 
 ## Future Roadmap
 
@@ -268,6 +272,7 @@ The deployed demo is intentionally mock-backed. It demonstrates the full applica
 - Phase 8F: portfolio evidence polish and reviewer-ready documentation
 - Phase 8G: Skyscanner access preparation
 - Phase 8H: real provider activation checklist
+- Phase 8J: dashboard and calendar decision UX polish while staying mock/demo-only
 - Phase 9: limited live provider dry run
 - Phase 10: production monitoring
 - Phase 11: GitHub Actions or scheduled report automation
